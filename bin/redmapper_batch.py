@@ -164,9 +164,20 @@ with open(jobfile, 'w') as jf:
         jf.write("#PBS -l mem=%dmb\n" % (memory))
         jf.write("#PBS -j oe\n")
         jf.write('N_CPU=%d\n' % (n_nodes * batchconfig[batchmode]['ppn']))
+
+    elif (batchconfig[batchmode]['batch'] == 'slurm'):
+        # SLURM mode
+        ppn = batchconfig[batchmode]['ppn']
+        n_nodes = int(np.ceil(float(hpix_run.size) / float(ppn)))
+        jf.write("#SBATCH -p %s\n" % (batchconfig[batchmode]['queue']))
+        jf.write("#SBATCH -N s=%d\n" % (n_nodes))
+        jf.write("#SBATCH --ntasks-per-node %d\n" % (ppn))
+        jf.write("#SBATCH -t=%d:00:00\n" % (int(walltime / 60)))
+        jf.write("#SBATCH --mem %dmb\n" % (memory/n_nodes))
+        jf.write("#SBATCH -J %s[1-%d]\n" % (jobname, hpix_run.size))
     else:
         # Nothing else supported
-        raise RuntimeError("Only LSF and PBS supported at this time.")
+        raise RuntimeError("Only LSF, PBS and SLURM supported at this time.")
 
     jf.write("pixarr=(")
     for hpix in hpix_run:
