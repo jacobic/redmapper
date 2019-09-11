@@ -134,10 +134,6 @@ class SelectSpecRedGalaxies(object):
             c = interpol(template.color[:, template_index], template.z, gals.z)
             delta = galcolor[:, j] - c
 
-            print('template:')
-            print(template.z)
-            print(template.color[:, template_index])
-
             st = np.argsort(delta)
             delta5 = delta[st[int(0.05 * delta.size)]]
             delta99 = delta[st[int(0.99 * delta.size)]]
@@ -146,11 +142,6 @@ class SelectSpecRedGalaxies(object):
 
             ecfitter = EcgmmFitter(delta[u], galcolor_err[u, j])
             wt, mu, sigma = ecfitter.fit([0.2], [-0.5, 0.0], [0.2, 0.05], offset=2.0)
-
-            print('wt, mu, sigma:')
-            print(wt)
-            print(mu)
-            print(sigma)
 
             mvals = interpol(template.color[:, template_index], template.z, nodes) + mu[1]
             scvals = np.zeros(nodes.size) + sigma[1]
@@ -170,10 +161,6 @@ class SelectSpecRedGalaxies(object):
             p0 = mvals
             mvals = medfitter.fit(p0)
 
-            print('p0, mvals:')
-            print(p0)
-            print(mvals)
-
             # for the median width we make a broader cut
             spl = CubicSpline(nodes, mvals)
             med = spl(gals.z)
@@ -184,10 +171,6 @@ class SelectSpecRedGalaxies(object):
             medfitter = MedZFitter(nodes, gals.z[u], np.abs(galcolor[u, j] - med[u]))
             p0 = scvals
             scvals = medfitter.fit(p0)
-
-            print('p0, scvals:')
-            print(p0)
-            print(scvals)
 
             # and record these
             medcol[:, j] = mvals
@@ -214,26 +197,13 @@ class SelectSpecRedGalaxies(object):
             p0_scatter = medcol_width[:, j]
             mvals, = rsfitter.fit(p0_mean, p0_slope, p0_scatter, fit_mean=True)
 
-            print('p0s, mvals:')
-            print(p0_mean)
-            print(p0_slope)
-            print(p0_scatter)
-            print(mvals)
-
             # And just the scatter...
             p0_mean = mvals
             scvals, = rsfitter.fit(p0_mean, p0_slope, p0_scatter, fit_scatter=True)
 
-            print('scvals:')
-            print(scvals)
-
             # And both
             p0_scatter = scvals
             mvals, scvals = rsfitter.fit(p0_mean, p0_slope, p0_scatter, fit_mean=True, fit_scatter=True)
-
-            print('mvals, scvals:')
-            print(mvals)
-            print(scvals)
 
             meancol[:, j] = mvals
             meancol_scatter[:, j] = scvals

@@ -942,20 +942,6 @@ class EcgmmFitter(object):
 
         self._y += offset
 
-        """
-        if bounds is None:
-            self._bounds = [(0.0, 1.0), # wt0
-                            (-1.0 + offset, 1.0 + offset), # mu0
-                            (-1.0 + offset, 1.0 + offset), # mu1
-                            (0.0, 0.5), # sigma0
-                            (0.0, 0.5)] # sigma1
-        else:
-            self._bounds = bounds
-
-        # FIXME
-        pars = scipy.optimize.fmin(self, p0, disp=False, xtol=1e-6, ftol=1e-6)
-        """
-
         if bounds is None:
             _bounds = [(1e-5, 1.0), # wt0
                        (-1.0 + offset, 1.0 + offset), # mu0
