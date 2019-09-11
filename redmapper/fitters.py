@@ -899,8 +899,8 @@ class EcgmmFitter(object):
         y_err: `np.array`
            Float array of y error values to decompose.
         """
-        self._y = y
-        self._y_err2 = y_err**2.
+        self._y = y.astype(np.float64)
+        self._y_err2 = y_err.astype(np.float64)**2.
 
     def fit(self, wt0, mu, sigma, bounds=None, offset=0.0):
         """
@@ -942,6 +942,7 @@ class EcgmmFitter(object):
 
         self._y += offset
 
+        """
         if bounds is None:
             self._bounds = [(0.0, 1.0), # wt0
                             (-1.0 + offset, 1.0 + offset), # mu0
@@ -953,6 +954,29 @@ class EcgmmFitter(object):
 
         # FIXME
         pars = scipy.optimize.fmin(self, p0, disp=False, xtol=1e-6, ftol=1e-6)
+        """
+
+        if bounds is None:
+            _bounds = [(1e-5, 1.0), # wt0
+                       (-1.0 + offset, 1.0 + offset), # mu0
+                       (-1.0 + offset, 1.0 + offset), # mu1
+                       (1e-2, 0.5), # sigma0
+                       (1e-2, 0.5)] # sigma1
+        else:
+            _bounds = bounds
+
+        res = scipy.optimize.minimize(self,
+                                      p0,
+                                      method='L-BFGS-B',
+                                      bounds=_bounds,
+                                      jac=False,
+                                      options={'maxfun': 2000,
+                                               'maxiter': 2000,
+                                               'maxcor': 20,
+                                               'eps': 1e-5,
+                                               'gtol': 1e-8},
+                                      callback=None)
+        pars = res.x
 
         wt = np.array([pars[0], 1.0 - pars[0]])
         mu = pars[1:3] - offset
@@ -987,14 +1011,14 @@ class EcgmmFitter(object):
         sigma1 = pars[4]
 
         wt1 = 1.0 - wt0
-
+        """
         if (wt0 < self._bounds[0][0] or wt0 > self._bounds[0][1] or
             mu0 < self._bounds[1][0] or mu0 > self._bounds[1][1] or
             mu1 < self._bounds[2][0] or mu1 > self._bounds[2][1] or
             sigma0 < self._bounds[3][0] or sigma0 > self._bounds[3][1] or
             sigma1 < self._bounds[4][0] or sigma1 > self._bounds[4][1]):
             return np.inf
-
+            """
         g = ((wt0 / np.sqrt(2. * np.pi * (sigma0**2. + self._y_err2)) * np.exp(-(self._y - mu0)**2. / (2. * (sigma0**2. + self._y_err2)))) +
              (wt1 / np.sqrt(2. * np.pi * (sigma1**2. + self._y_err2)) * np.exp(-(self._y - mu1)**2. / (2. * (sigma1**2. + self._y_err2)))))
 

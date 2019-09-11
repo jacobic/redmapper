@@ -31,6 +31,6 @@ install:
   - python setup.py install
   - popd
   - python setup.py install
-script: cd tests && python test_selectspecred.py
+script: cd tests && python test_fitters.py
 cache:
   pip: true
