@@ -45,7 +45,7 @@ class DepthMapTestCase(unittest.TestCase):
         testing.assert_almost_equal(areas, areas_idl, 4)
 
         config2 = Configuration(file_path + "/" + conf_filename)
-        config2.d.hpix = 582972
+        config2.d.hpix = [582972]
         config2.d.nside = 1024
         config2.border = 0.02
         depthstr2 = DepthMap(config2)
@@ -60,7 +60,7 @@ class DepthMapTestCase(unittest.TestCase):
         testing.assert_almost_equal(m502, comp_m50, 4)
 
         config3 = Configuration(file_path + "/" + conf_filename)
-        config3.d.hpix = 8421
+        config3.d.hpix = [8421]
         config3.d.nside = 128
         config3.border = 0.0
         depthstr3 = DepthMap(config3)

@@ -228,12 +228,12 @@ class RedSequenceColorPar(object):
                     spl=CubicSpline(pars[0]['COVMAT_Z'],pars[0]['SIGMA'][j,k,:])
                     self.sigma[j,k,:] = spl(self.z)
 
-                    too_high,=np.where(self.sigma[j,k,:] > 0.9)
+                    too_high,=np.where(self.sigma[j,k,:] > 0.99)
                     if (too_high.size > 0):
-                        self.sigma[j,k,too_high] = 0.9
-                    too_low,=np.where(self.sigma[j,k,:] < -0.9)
+                        self.sigma[j,k,too_high] = 0.99
+                    too_low,=np.where(self.sigma[j,k,:] < -0.99)
                     if (too_low.size > 0):
-                        self.sigma[j,k,too_low] = -0.9
+                        self.sigma[j,k,too_low] = -0.99
 
                     self.sigma[k,j,:] = self.sigma[j,k,:]
 
@@ -538,6 +538,7 @@ class RedSequenceColorPar(object):
         ax = fig.add_subplot(223)
         ax.plot(self.z[: -1], self.sigma[ind, ind, : -1], 'r--')
         ax.plot(self.z[not_extrap], self.sigma[ind, ind, not_extrap], 'r-')
+        ax.set_ylim(bottom=0.0)
         ax.set_xlabel('Redshift')
         ax.set_ylabel('(%s - %s) sigma' % (bands[ind], bands[ind + 1]))
 
@@ -567,6 +568,7 @@ class RedSequenceColorPar(object):
                 ax = fig.add_subplot(nrow, 2, ctr)
                 ax.plot(self.z[: -1], self.sigma[j, k, : -1], 'r--')
                 ax.plot(self.z[not_extrap], self.sigma[j, k, not_extrap], 'r-')
+                ax.set_ylim(-1.0, 1.0)
                 ax.set_xlabel('Redshift')
                 ax.set_ylabel('Corr %s-%s / %s-%s' % (bands[j], bands[j + 1], bands[k], bands[k + 1]))
                 ctr += 1

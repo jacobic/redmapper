@@ -125,7 +125,7 @@ class RunPercolation(ClusterRunner):
 
         self.cleaninput = kwargs.pop('cleaninput', False)
 
-        self.config.logger.info("%d: Percolation using catfile: %s" % (self.config.d.hpix, self.config.catfile))
+        self.config.logger.info("%s: Percolation using catfile: %s" % (self.hpix_logstr, self.config.catfile))
 
         # read in the catalog...
         self.cat = ClusterCatalog.from_catfile(self.config.catfile,
@@ -153,6 +153,22 @@ class RunPercolation(ClusterRunner):
                         (self.cat.Lambda > self.config.percolation_minlambda))
 
         # How to bail if use.size == 0?  Need a framework for fail...
+        if use.size == 0:
+            self.cat = None
+            self.config.logger.info("No usable inputs for percolation on pixel %s" % (self.hpix_logstr))
+            return False
+
+        mstar = self.zredstr.mstar(self.cat.z[use])
+        mlim = mstar - 2.5 * np.log10(self.limlum)
+
+        good, = np.where(self.cat.refmag[use] < mlim)
+
+        if good.size == 0:
+            self.cat = None
+            self.config.logger.info("No good inputs for percolation on pixel %s" % (self.hpix_logstr))
+            return False
+
+        use = use[good]
 
         if self.keepid:
             st = np.argsort(self.cat.mem_match_id[use])
@@ -167,7 +183,13 @@ class RunPercolation(ClusterRunner):
             catmask = self.mask.compute_radmask(self.cat.ra, self.cat.dec)
             self.cat = self.cat[catmask]
 
+            if self.cat.size == 0:
+                self.cat = None
+                self.config.logger.info("No input cluster positions are in the mask on pixel %s" % (self.hpix_logstr))
+                return False
+
         # This preserves previously set ids
+
         self._generate_mem_match_ids()
 
         self.cat.ra_orig = self.cat.ra
@@ -200,6 +222,8 @@ class RunPercolation(ClusterRunner):
 
         self.maxiter = self.config.percolation_niter
         self.min_lambda = self.config.percolation_minlambda
+
+        return True
 
     def _process_cluster(self, cluster):
         """

@@ -353,7 +353,7 @@ class HPMask(Mask):
         nside_coverage = cov_hdr['NSIDE']
 
         # Which subpixels are we reading?
-        if config.d.hpix > 0:
+        if len(config.d.hpix) > 0:
             covpixels = get_healsparse_subpix_indices(config.d.nside, config.d.hpix,
                                                       config.border, nside_coverage)
         else:

@@ -419,7 +419,7 @@ class RedSequenceCalibrator(object):
             spl = CubicSpline(self.pars.pivotmag_z, mvals)
             med = spl(gals.z)
             medfitter = MedZFitter(self.pars.pivotmag_z, gals.z, np.abs(col - med))
-            scvals = medfitter.fit(scvals)
+            scvals = medfitter.fit(scvals, min_val=0.01)
 
             self.pars.medcol[:, j] = mvals
             self.pars.medcol_width[:, j] = 1.4826 * scvals
@@ -504,7 +504,6 @@ class RedSequenceCalibrator(object):
             # Need to go through the _ndarray because ztag and zstag are strings
             cvals = np.zeros(self.pars._ndarray[self.ztag[j]].size)
             svals = np.zeros(self.pars._ndarray[self.zstag[j]].size)
-            scvals = np.zeros(self.pars.covmat_z.size) + 0.05
             photo_err = np.zeros_like(cvals)
 
             # Calculate median truncation
@@ -518,6 +517,9 @@ class RedSequenceCalibrator(object):
             # error, and should always be larger.  This helps regularize the edges
             # where things otherwise can run away.
             scatter_max = spl(self.pars.covmat_z)
+
+            # Initial guess for scvals should be halfway between 0.01 and scatter_max
+            scvals = (scatter_max - 0.01) / 2.0 + 0.01
 
             u, = np.where((galcolor[:, j] > (med - self.config.calib_color_nsig * sc)) &
                           (galcolor[:, j] < (med + self.config.calib_color_nsig * sc)))
@@ -569,10 +571,6 @@ class RedSequenceCalibrator(object):
             # fit combined
             cvals, svals, scvals = rsfitter.fit(cvals, svals, scvals,
                                                 fit_mean=True, fit_slope=True, fit_scatter=True)
-            # Re-fit...
-            #cvals, svals, scvals = rsfitter.fit(cvals, svals, scvals,
-            #                                    fit_mean=True, fit_slope=True, fit_scatter=True)
-
 
             # And record in the parameters
             self.pars._ndarray[self.ctag[j]] = cvals
@@ -585,6 +583,32 @@ class RedSequenceCalibrator(object):
 
     def _calc_offdiagonal_pars(self, gals, doRaise=True):
         """
+        Set the off-diagonal elements of the covariance matrix.
+
+        These are just set to self.config.calib_covmat_constant
+
+        Parameters
+        ----------
+        gals: `redmapper.GalaxyCatalog`
+           Galaxy catalog with fields required for fit.
+        doRaise: `bool`, optional
+           Raise if there's a problem with the background?  Default is True.
+        """
+
+        ncol = self.config.nmag - 1
+
+        for j in xrange(ncol):
+            for k in xrange(j + 1, ncol):
+                self.pars.sigma[j, k, :] = self.config.calib_covmat_constant
+                self.pars.sigma[k, j, :] = self.pars.sigma[j, k, :]
+
+                self.pars.covmat_amp[j, k, :] = self.config.calib_covmat_constant * self.pars.sigma[j, j, :] * self.pars.sigma[k, k, :]
+                self.pars.covmat_amp[k, j, :] = self.pars.covmat_amp[j, k, :]
+
+    def _calc_offdiagonal_pars_old(self, gals, doRaise=True):
+        """
+        DEPRECATED, this doesn't work right.
+
         Calculate the off-diagonal elements of the covariance matrix.
 
         Sets self.pars.sigma, self.pars.covmat_amp (off-diagonal).
@@ -596,6 +620,7 @@ class RedSequenceCalibrator(object):
         doRaise: `bool`, optional
            Raise if there's a problem with the background?  Default is True.
         """
+
         # The routine to compute the off-diagonal elements
 
         ncol = self.config.nmag - 1
@@ -714,7 +739,8 @@ class RedSequenceCalibrator(object):
                                                     self.config.calib_covmat_prior,
                                                     min_eigenvalue=self.config.calib_covmat_min_eigenvalue)
 
-            rvals = odfitter.fit(np.zeros(self.pars.covmat_z.size), full_covmats=full_covmats)
+            #rvals = odfitter.fit(np.zeros(self.pars.covmat_z.size), full_covmats=full_covmats)
+            rvals = np.zeros(self.pars.covmat_z.size) + 0.9
 
             self.pars.sigma[j, k, :] = rvals
             self.pars.sigma[k, j, :] = rvals

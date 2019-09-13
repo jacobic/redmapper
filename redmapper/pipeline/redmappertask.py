@@ -69,7 +69,7 @@ class RunRedmapperPixelTask(object):
 
         self.config.border = self.config.compute_border()
 
-        self.config.d.hpix = self.pixel
+        self.config.d.hpix = [self.pixel]
         self.config.d.nside = self.nside
         self.config.d.outbase = '%s_%d_%05d' % (self.config.outbase, self.nside, self.pixel)
 

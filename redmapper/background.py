@@ -355,6 +355,12 @@ class BackgroundGenerator(object):
         for i in xrange(self.config.calib_nproc):
             ubins, = np.where((self.zbins < zedges[i]) & (self.zbins > zedges[i + 1]))
             gd, = np.where(ubins < self.zbins.size)
+
+            # If we have more processes than bins, some of these will be empty
+            # and this prevents us from adding them to the list
+            if gd.size == 0:
+                continue
+
             ubins = ubins[gd]
 
             zbinmark = np.zeros(self.zbins.size, dtype=np.bool)
@@ -472,9 +478,9 @@ class BackgroundGenerator(object):
         refmags = np.zeros(ngal, dtype=np.float32)
 
         if (self.deepmode):
-            zlimmag = zredstr.mstar(zbins_use + self.config.bkg_zbinsize) - 2.5 * np.log10(0.01)
+            zlimmag = np.atleast_1d(zredstr.mstar(zbins_use + self.config.bkg_zbinsize) - 2.5 * np.log10(0.01))
         else:
-            zlimmag = zredstr.mstar(zbins_use + self.config.bkg_zbinsize) - 2.5 * np.log10(0.1)
+            zlimmag = np.atleast_1d(zredstr.mstar(zbins_use + self.config.bkg_zbinsize) - 2.5 * np.log10(0.1))
 
         bad, = np.where(zlimmag >= self.config.limmag_catalog)
         zlimmag[bad] = self.config.limmag_catalog - 0.01

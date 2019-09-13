@@ -1094,22 +1094,26 @@ def get_healsparse_subpix_indices(subpix_nside, subpix_hpix, subpix_border, cove
     ----------
     subpix_nside: `int`
        Nside for the subregion
-    subpix_hpix: `int`
-       Pixel number for the subregion (ring format)
+    subpix_hpix: `list`
+       Pixel numbers for the subregion (ring format).
     subpix_border: `float`
        Border radius to cover outside subpix_hpix
     coverage_nside: `int`
        Nside of the healsparse coverage map
     """
 
+    if len(subpix_hpix) == 0:
+        raise RuntimeError("subpix_hpix cannot be an empty list.")
+    if subpix_border > 0.0 and len(subpix_hpix) > 1:
+        raise NotImplementedError("Cannot read multiple subpixels with a border.")
+
     # First, we need to know which pixel(s) from nside_coverage are covered by
     # subpix_hpix
 
     if subpix_nside == coverage_nside:
-        # simply convert to nest
         covpix = hp.ring2nest(subpix_nside, subpix_hpix)
     elif subpix_nside > coverage_nside:
-        # what pixel is this contained in?
+        # what pixels are these contained in?
         theta, phi = hp.pix2ang(subpix_nside, subpix_hpix, nest=False)
         covpix = hp.ang2pix(coverage_nside, theta, phi, nest=True)
     else:
@@ -1117,13 +1121,15 @@ def get_healsparse_subpix_indices(subpix_nside, subpix_hpix, subpix_border, cove
         # what coverage pixels are contained in subpix_hpix?
         subpix_hpix_nest = hp.ring2nest(subpix_nside, subpix_hpix)
         bit_shift = 2 * int(np.round(np.log(coverage_nside / subpix_nside) / np.log(2)))
-        n_pix = 2**bit_shift
-        covpix = np.left_shift(subpix_hpix_nest, bit_shift) + np.arange(n_pix)
+        n_pix_per_pix = 2**bit_shift
+        covpix = np.zeros(len(subpix_hpix_nest) * n_pix_per_pix, dtype=np.int64)
+        for i, hpix in enumerate(subpix_hpix_nest):
+            covpix[i * n_pix_per_pix: (i + 1) * n_pix_per_pix] = np.left_shift(hpix, bit_shift) + np.arange(n_pix_per_pix)
 
-    # And now if we have a border...
+    # And now if we have a border...(only if the length is 1)
     if subpix_border > 0.0:
         nside_testing = max([coverage_nside * 4, subpix_nside * 4])
-        boundaries = hp.boundaries(subpix_nside, subpix_hpix, step=nside_testing/subpix_nside)
+        boundaries = hp.boundaries(subpix_nside, subpix_hpix[0], step=nside_testing/subpix_nside)
 
         extrapix = np.zeros(0, dtype=np.int64)
 

@@ -127,6 +127,7 @@ class ZLambdaFitter(object):
             spl = CubicSpline(self._slope_nodes, p0_scatter)
             self._gscatter = np.clip(spl(self._redshifts), self._min_scatter, None)
 
+        # FIXME
         pars = scipy.optimize.fmin(self, p0, disp=False)
 
         retval = []
@@ -221,10 +222,19 @@ class ZLambdaCalibrator(object):
         use, = np.where((cat.Lambda/cat.scaleval > self.config.calib_zlambda_minlambda) &
                         (cat.scaleval > 0.0) &
                         (cat.maskfrac < self.config.max_maskfrac))
-        cat = cat[use]
 
         nodes = make_nodes(self.config.zrange, self.config.calib_zlambda_nodesize)
         slope_nodes = make_nodes(self.config.zrange, self.config.calib_zlambda_slope_nodesize)
+
+        # Confirm that we have enough clusters to do the fit
+        hist, _ = np.histogram(cat.z[use], bins=nodes)
+        if hist.min() == 0:
+            raise RuntimeError("Calibration of zlambda correction cannot continue, as "
+                               "there are redshift bins with no cluster spectra. "
+                               "You must either reduce config.calib_zlambda_minlambda or "
+                               "increase config.calib_zlambda_nodesize.")
+
+        cat = cat[use]
 
         # we have two runs, first "<zlambda|ztrue>" the second "<ztrue|zlambda>".
 

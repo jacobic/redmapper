@@ -88,8 +88,8 @@ else:
 
 config = redmapper.Configuration(args.configfile)
 
-if config.hpix != 0:
-    raise ValueError("Cannot run redmapper in batch mode with hpix != 0")
+if len(config.hpix) != 0:
+    raise ValueError("Cannot run redmapper in batch mode with hpix not an empty list (full sky)")
 
 # Check the nside
 

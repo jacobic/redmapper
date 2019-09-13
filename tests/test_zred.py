@@ -100,7 +100,10 @@ class ZredTestCase(unittest.TestCase):
         outfile = os.path.join(self.test_dir, 'test_zred_out.fits')
 
         tab = fitsio.read(config.galfile, ext=1, lower=True)
-        galfile = os.path.join(os.path.dirname(config.galfile), tab[0]['filenames'][0].decode())
+        try:
+            galfile = os.path.join(os.path.dirname(config.galfile), tab[0]['filenames'][0].decode())
+        except AttributeError:
+            galfile = os.path.join(os.path.dirname(config.galfile), tab[0]['filenames'][0])
 
         zredRuncat = ZredRunCatalog(config)
 
@@ -116,7 +119,10 @@ class ZredTestCase(unittest.TestCase):
         # And compare to the "official" run...
         config.zredfile = os.path.join(file_path, 'zreds_test', 'dr8_test_zreds_master_table.fit')
         ztab = fitsio.read(config.zredfile, ext=1, lower=True)
-        zredfile = os.path.join(os.path.dirname(config.zredfile), ztab[0]['filenames'][0].decode())
+        try:
+            zredfile = os.path.join(os.path.dirname(config.zredfile), ztab[0]['filenames'][0].decode())
+        except AttributeError:
+            zredfile = os.path.join(os.path.dirname(config.zredfile), ztab[0]['filenames'][0])
 
         gals_compare = GalaxyCatalog.from_galfile(galfile, zredfile=zredfile)
 
@@ -143,7 +149,7 @@ class ZredTestCase(unittest.TestCase):
 
         config = Configuration(os.path.join(file_path, configfile))
 
-        config.d.hpix = 2163
+        config.d.hpix = [2163]
         config.d.nside = 64
         config.border = 0.0
 

@@ -103,6 +103,8 @@ class RunColormem(ClusterRunner):
 
         self.doublerun = True
 
+        return True
+
     def _doublerun_sort(self):
         """
         Sort the catalog for when doing a second pass with percolation masking.

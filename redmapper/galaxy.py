@@ -13,6 +13,7 @@ import numpy as np
 import itertools
 import healpy as hp
 import os
+from collections.abc import Iterable
 
 from .catalog import Catalog, Entry
 from .mask import get_mask
@@ -73,7 +74,7 @@ class GalaxyCatalog(Catalog):
         self.depth = 10 if 'depth' not in kwargs else kwargs['depth']
 
     @classmethod
-    def from_galfile(cls, filename, zredfile=None, nside=0, hpix=0, border=0.0, truth=False):
+    def from_galfile(cls, filename, zredfile=None, nside=0, hpix=[], border=0.0, truth=False):
         """
         Generate a GalaxyCatalog from a redmapper "galfile."
 
@@ -87,9 +88,9 @@ class GalaxyCatalog(Catalog):
            Filename of the redmapper zred "zreds_master_table.fit" summary file.
         nside: `int`, optional
            Nside of healpix sub-region to read in.  Default is 0 (full catalog).
-        hpix: `int`, optional
-           Healpix number (ring format) of sub-region to read in.
-           Default is 0 (full catalog).
+        hpix: `list`, optional
+           Healpix numbers (ring format) of sub-region to read in.
+           Default is [] (full catalog).
         border: `float`, optional
            Border around hpix (in degrees) to read in.  Default is 0.0.
         truth: `bool`, optional
@@ -100,12 +101,13 @@ class GalaxyCatalog(Catalog):
         else:
             use_zred = False
 
-        if hpix == 0:
-            _hpix = None
+        if not isinstance(hpix, Iterable):
+            _hpix = [hpix]
         else:
             _hpix = hpix
+
         # do we have appropriate keywords
-        if _hpix is not None and nside is None:
+        if len(_hpix) > 0 and nside is None:
             raise ValueError("If hpix is specified, must also specify nside")
         if border < 0.0:
             raise ValueError("Border must be >= 0.0.")
@@ -113,9 +115,14 @@ class GalaxyCatalog(Catalog):
         if nside > 0:
             if not hp.isnsideok(nside):
                 raise ValueError("Nside not valid")
-            if _hpix is not None:
-                if _hpix < 0 or _hpix >= hp.nside2npix(nside):
-                    raise ValueError("hpix out of range.")
+            if len(_hpix) > 0:
+                for _hp in _hpix:
+                    if _hp < 0 or _hp >= hp.nside2npix(nside):
+                        raise ValueError("hpix %d is out of range." % (hp))
+
+        if border > 0.0 and len(_hpix) > 0:
+            if len(_hpix) != 1:
+                raise NotImplementedError("Cannot read a boundary around a pixel list.")
 
         # check that the file is there and the right format
         # this will raise an exception if it's not there.
@@ -171,7 +178,11 @@ class GalaxyCatalog(Catalog):
             # Also, we are assuming that the files actually match up in terms of length, etc.
             mark = np.zeros(indices.size, dtype=np.bool)
             for i, f in enumerate(ztab.filenames[indices]):
-                if os.path.isfile(os.path.join(zpath, f.decode())):
+                try:
+                    fname = os.path.join(zpath, f.decode())
+                except AttributeError:
+                    fname = os.path.join(zpath, f)
+                if os.path.isfile(fname):
                     mark[i] = True
 
             bad, = np.where(~mark)
@@ -185,7 +196,11 @@ class GalaxyCatalog(Catalog):
         # will need to also get the list of columns from the thingamajig.
 
         # and need to be able to cut?
-        elt = fitsio.read(os.path.join(path, tab.filenames[indices[0]].decode()), ext=1, rows=0, lower=True)
+        try:
+            first_fname = os.path.join(path, tab.filenames[indices[0]].decode())
+        except AttributeError:
+            first_fname = os.path.join(path, tab.filenames[indices[0]])
+        elt = fitsio.read(first_fname, ext=1, rows=0, lower=True)
         dtype_in = elt.dtype.descr
         if not truth:
             mark = []
@@ -205,26 +220,40 @@ class GalaxyCatalog(Catalog):
         cat = np.zeros(np.sum(tab.ngals[indices]), dtype=dtype)
 
         if use_zred:
-            zelt = fitsio.read(os.path.join(zpath, ztab.filenames[indices[0]].decode()), ext=1, rows=0, upper=False)
+            try:
+                fname = os.path.join(zpath, ztab.filenames[indices[0]].decode())
+            except AttributeError:
+                fname = os.path.join(zpath, ztab.filenames[indices[0]])
+
+            zelt = fitsio.read(fname, ext=1, rows=0, upper=False)
             zcat = np.zeros(cat.size, dtype=zelt.dtype)
 
         # read the files
         ctr = 0
         for index in indices:
-            cat[ctr: ctr + tab.ngals[index]] = fitsio.read(os.path.join(path, tab.filenames[index].decode()), ext=1, lower=True, columns=columns)
+            try:
+                fname = os.path.join(path, tab.filenames[index].decode())
+            except AttributeError:
+                fname = os.path.join(path, tab.filenames[index])
+            cat[ctr: ctr + tab.ngals[index]] = fitsio.read(fname, ext=1, lower=True, columns=columns)
             if use_zred:
                 # Note that this effectively checks that the numbers of rows in each file match properly (though the exception will be cryptic...)
-                zcat[ctr: ctr + tab.ngals[index]] = fitsio.read(os.path.join(zpath, ztab.filenames[index].decode()), ext=1, upper=False)
+                try:
+                    fname = os.path.join(zpath, ztab.filenames[index].decode())
+                except AttributeError:
+                    fname = os.path.join(zpath, ztab.filenames[index])
+                zcat[ctr: ctr + tab.ngals[index]] = fitsio.read(fname, ext=1, upper=False)
             ctr += tab.ngals[index]
 
-        if _hpix is not None and nside > 0 and border > 0.0:
+        #if _hpix is not None and nside > 0 and border > 0.0:
+        if len(_hpix) == 1 and nside > 0 and border > 0.0:
             # Trim to be closer to the border if necessary...
 
             nside_cutref = 512
-            boundaries = hp.boundaries(nside, hpix, step=nside_cutref/nside)
+            boundaries = hp.boundaries(nside, _hpix[0], step=nside_cutref/nside)
             theta, phi = hp.pix2ang(nside_cutref, np.arange(hp.nside2npix(nside_cutref)))
             ipring_coarse = hp.ang2pix(nside, theta, phi)
-            inhpix, = np.where(ipring_coarse == hpix)
+            inhpix, = np.where(ipring_coarse == _hpix[0])
 
             for i in xrange(boundaries.shape[1]):
                 pixint = hp.query_disc(nside_cutref, boundaries[:, i], np.radians(border), inclusive=True, fact=8)
@@ -350,7 +379,7 @@ class GalaxyCatalog(Catalog):
 
         return self._htm_matcher.match(ras, decs, radius, maxmatch=maxmatch)
 
-def get_subpixel_indices(galtable, hpix=None, border=0.0, nside=0):
+def get_subpixel_indices(galtable, hpix=[], border=0.0, nside=0):
     """
     Routine to get subpixel indices from a galaxy table.
 
@@ -358,10 +387,11 @@ def get_subpixel_indices(galtable, hpix=None, border=0.0, nside=0):
     ----------
     galtable: `redmapper.Catalog`
        A redmapper galaxy table master catalog
-    hpix: `int`, optional
-       Healpix number (ring format) of sub-region.  Default is 0 (full catalog).
+    hpix: `list`, optional
+       Healpix number (ring format) of sub-region.  Default is [] (full catalog)
     border: `float`, optional
        Border around hpix (in degrees) to find pixels.  Default is 0.0.
+       Only works if hpix is a single-length list
     nside: `int`, optional
        Nside of healpix subregion.  Default is 0 (full catalog).
 
@@ -371,11 +401,30 @@ def get_subpixel_indices(galtable, hpix=None, border=0.0, nside=0):
        Integer array of indices of galaxy table pixels in the subregion.
     """
 
-    if hpix is None or nside == 0:
+    if len(hpix) == 0 or nside == 0:
         return np.arange(galtable.filenames.size)
 
     theta, phi = hp.pix2ang(galtable.nside, galtable.hpix)
     ipring_big = hp.ang2pix(nside, theta, phi)
+
+    _, indices = esutil.numpy_util.match(hpix, ipring_big)
+
+    # Ignore border if using full catalog
+    if border > 0.0 and len(hpix) > 0:
+        if len(hpix) != 1:
+            raise NotImplementedError("Cannot do boundary around a pixel list.")
+
+        # now we need to find the extra boundary...
+        boundaries = hp.boundaries(nside, hpix[0], step=galtable.nside/nside)
+        inhpix = galtable.hpix[indices]
+        for i in xrange(boundaries.shape[1]):
+            pixint = hp.query_disc(galtable.nside, boundaries[:, i],
+                                   border*np.pi/180., inclusive=True, fact=8)
+            inhpix = np.append(inhpix, pixint)
+        inhpix = np.unique(inhpix)
+        _, indices = esutil.numpy_util.match(inhpix, galtable.hpix)
+
+    """
     indices, = np.where(ipring_big == hpix)
     if border > 0.0:
         # now we need to find the extra boundary...
@@ -387,7 +436,7 @@ def get_subpixel_indices(galtable, hpix=None, border=0.0, nside=0):
             inhpix = np.append(inhpix, pixint)
         inhpix = np.unique(inhpix)
         _, indices = esutil.numpy_util.match(inhpix, galtable.hpix)
-
+        """
     return indices
 
 class FakeMaskConfig(object):
@@ -726,7 +775,10 @@ class GalaxyCatalogMaker(object):
 
                 bad, = np.where(gals[d[0]].flatten() >= 90.0)
                 if bad.size > 0:
-                    raise RuntimeError("Input magnitude/error column %s contains %d elements with >= 90." % (d[0], bad.size))
+                    if d[0] == 'mag':
+                        raise RuntimeError("Input magnitude column %s contains %d elements with >= 90." % (d[0], bad.size))
+                    elif d[0] == 'mag_err' and self.b[0] == 0.0:
+                        raise RuntimeError("Input mag_err column %s contains %d elements with >= 90." % (d[0], bad.size))
 
                 bad, = np.where(gals[d[0]].flatten() <= 0.0)
                 if bad.size > 0:

@@ -9,14 +9,14 @@ from numpy import random
 
 from redmapper.fitters import EcgmmFitter
 from redmapper.fitters import MedZFitter
-from redmapper.fitters import RedSequenceFitter, RedSequenceOffDiagonalFitter
+from redmapper.fitters import RedSequenceFitter
 from redmapper.fitters import CorrectionFitter
 from redmapper.utilities import make_nodes, CubicSpline
 
 class FitterTestCase(unittest.TestCase):
     """
     Tests for various fitters in redmapper.fitters, including EcgmmFitter,
-    MedZFitter, RedSequenceFitter, RedSequenceOffDiagonalFitter, and
+    MedZFitter, RedSequenceFitter, and
     CorrectionFitter.
     """
     def test_ecgmm(self):
@@ -35,9 +35,9 @@ class FitterTestCase(unittest.TestCase):
         ecfitter = EcgmmFitter(ecgmmdata['DELTA'], ecgmmdata['GALCOLOR_ERR'])
         wt, mu, sigma = ecfitter.fit([0.2], [-0.5, 0.0], [0.2, 0.05], offset=0.5)
 
-        testing.assert_almost_equal(wt, [0.56762756, 0.43237244], 3)
-        testing.assert_almost_equal(mu, [-0.3184651, -0.1168626], 3)
-        testing.assert_almost_equal(sigma, [0.15283837, 0.04078598], 3)
+        testing.assert_almost_equal(wt, [0.56733591, 0.43266409], 5)
+        testing.assert_almost_equal(mu, [-0.31850688, -0.11686182], 5)
+        testing.assert_almost_equal(sigma, [0.15283559, 0.04079095], 5)
 
     def test_make_nodes(self):
         """
@@ -143,44 +143,6 @@ class FitterTestCase(unittest.TestCase):
         testing.assert_almost_equal(meanpars3, [0.93834492, 1.09276382, 1.27604319], 4)
         testing.assert_almost_equal(slopepars3, [-0.01054824, -0.01296713, -0.01605626], 4)
         testing.assert_almost_equal(scatpars3, [0.03453208, 0.04054536, 0.03832689], 4)
-
-    def test_off_diagonal_fitter(self):
-        """
-        Run tests of redmapper.fitters.RedSequenceOffDiagonalFitter
-        """
-        file_path = 'data_for_tests'
-
-        # And test the off-diagonal fitter
-        offdiag_testdata_filename = 'test_offdiag_values.fit'
-        fitdata = fitsio.read(file_path + '/' + offdiag_testdata_filename, ext=1)
-
-        odfitter = RedSequenceOffDiagonalFitter(fitdata['NODES'][0],
-                                                fitdata['Z'][0],
-                                                fitdata['D1'][0],
-                                                fitdata['D2'][0],
-                                                fitdata['S1'][0],
-                                                fitdata['S2'][0],
-                                                fitdata['MAGERR'][0],
-                                                fitdata['J'][0],
-                                                fitdata['K'][0],
-                                                fitdata['PI'][0],
-                                                fitdata['BI'][0],
-                                                fitdata['COVMAT_PRIOR'][0],
-                                                min_eigenvalue=fitdata['MIN_EIGENVALUE'][0])
-
-        # also need to check inversion...
-        full_covmats = np.zeros((4, 4, fitdata['NODES'][0].size))
-        for i in xrange(4):
-            full_covmats[i, i, :] = fitdata['SIGMA'][0][i, :]**2.
-
-        p0 = np.array([0.0, 0.0])
-        pars = odfitter.fit(p0, full_covmats=full_covmats)
-
-        testing.assert_almost_equal(pars, fitdata['RVALS'][0], 2)
-        testing.assert_almost_equal(pars, [0.594956, 0.65475681], 4)
-
-    #def test_red_sequence_fitter_with_probs(self):
-    #    pass
 
     def test_zred_correction_fitter(self):
         """

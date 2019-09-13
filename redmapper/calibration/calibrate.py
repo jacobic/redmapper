@@ -26,7 +26,8 @@ from ..zlambda import ZlambdaCorrectionPar
 from ..plotting import SpecPlot
 from ..mask import get_mask
 from ..run_colormem import RunColormem
-
+from ..utilities import getMemoryString
+from .._version import __version__
 
 class RedmapperCalibrator(object):
     """
@@ -46,6 +47,8 @@ class RedmapperCalibrator(object):
             self.config = Configuration(conf)
         else:
             self.config = conf
+
+        print("Calibrating with version %s" % (__version__))
 
     def run(self):
         """
@@ -103,7 +106,6 @@ class RedmapperCalibrator(object):
             self.config.logger.info("Generating spectroscopic seeds (training spec)...")
             sss = SelectSpecSeeds(self.config)
             sss.run(usetrain=True)
-
         calib_iteration = RedmapperCalibrationIteration(self.config)
 
         for iteration in range(1, self.config.calib_niter + 1):
@@ -165,7 +167,7 @@ class RedmapperCalibrator(object):
             # Note that the config file has been updated!
             self.config.logger.info("Running full background...")
 
-            self.config.d.hpix = 0
+            self.config.d.hpix = []
             self.config.d.nside = 0
 
             bkg_gen = BackgroundGenerator(self.config)
@@ -329,6 +331,9 @@ class RedmapperCalibrationIteration(object):
             self.config.logger.info("%s already there.  Skipping..." % (self.config.zredfile))
         else:
             self.config.logger.info("Computing zreds for all galaxies in the training region...")
+            self.config.d.hpix = self.config.hpix
+            self.config.d.nside = self.config.nside
+
             if self.config.galfile_pixelized:
                 zredRunpix = ZredRunPixels(self.config)
                 zredRunpix.run()
@@ -503,7 +508,9 @@ class RedmapperCalibrationIteration(object):
             # Load in the catalog, apply the corrections, and make the plot.
             self.config.logger.info(self.config.catfile)
             cat = Catalog.from_fits_file(self.config.catfile)
-            use, = np.where(cat.Lambda > self.config.calib_zlambda_minlambda)
+
+            # Compute offsets for all marginal clusters to check for errors
+            use, = np.where(cat.Lambda > self.config.calib_minlambda)
             cat = cat[use]
 
             zlambda_corr = ZlambdaCorrectionPar(parfile=self.config.zlambdafile,
@@ -516,7 +523,17 @@ class RedmapperCalibrationIteration(object):
                 cluster.z_lambda = zlam
                 cluster.z_lambda_e = zlam_e
 
-            spec_plot.plot_values(cat.z_spec_init, cat.z_lambda, cat.z_lambda_e, title=self.config.d.outbase)
+            # Check for negative values... this is a minimal check
+            test, = np.where(cluster.z_lambda < 0.0)
+            if (test.size > 0):
+                raise RuntimeError("z_lambda correction calibration totally failed, and is yielding negative redshifts.  "
+                                   "Likely there is a configuration error, see config.calib_zlambda_minlambda and "
+                                   "config.calib_zlambda_nodesize.")
+
+            # Only plot those above the specified threshold
+            use, = np.where(cat.Lambda > self.config.calib_zlambda_minlambda)
+
+            spec_plot.plot_values(cat.z_spec_init[use], cat.z_lambda[use], cat.z_lambda_e[use], title=self.config.d.outbase)
 
 
 class RedmapperCalibrationIterationFinal(object):

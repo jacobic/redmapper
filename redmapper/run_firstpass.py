@@ -119,14 +119,14 @@ class RunFirstPass(ClusterRunner):
 
         # Check if there's a seedfile
         if self.config.seedfile is not None and os.path.isfile(self.config.seedfile):
-            self.config.logger.info("%d: Firstpass using seedfile: %s" % (self.config.d.hpix, self.config.seedfile))
+            self.config.logger.info("%s: Firstpass using seedfile: %s" % (self.hpix_logstr, self.config.seedfile))
             incat = Catalog.from_fits_file(self.config.seedfile)
         else:
             if self.specmode:
                 raise RuntimeError("Must have config.seedfile for run_firstpass in specmode.")
             elif not self.did_read_zreds:
                 raise RuntimeError("Must have config.seedfile for run_firstpass with no zreds.")
-            self.config.logger.info("%d: Firstpass using zreds as input" % (self.config.d.hpix))
+            self.config.logger.info("%s: Firstpass using zreds as input" % (self.hpix_logstr))
 
         if incat is not None:
             # We have an input catalog
@@ -159,24 +159,46 @@ class RunFirstPass(ClusterRunner):
                 self.cat.z_init = incat.zred
                 self.cat.z = incat.zred
 
-            use, = np.where((self.cat.zred >= self.config.zrange[0]) &
-                            (self.cat.zred <= self.config.zrange[1]))
+            cuse = ((self.cat.zred >= self.config.zrange[0]) &
+                    (self.cat.zred <= self.config.zrange[1]))
+
+            if self.cutgals_chisqmax:
+                cuse &= (self.cat.chisq < self.config.chisq_max)
+
+            use, = np.where(cuse)
+
+            if use.size == 0:
+                self.cat = None
+                self.config.logger.info("No good zred inputs for firstpass on pixel %s" % (self.hpix_logstr))
+                return False
+
             self.cat = self.cat[use]
 
             if self.cleaninput:
                 catmask = self.mask.compute_radmask(self.cat.ra, self.cat.dec)
                 self.cat = self.cat[catmask]
+
+                if self.cat.size == 0:
+                    self.cat = None
+                    self.config.logger.info("No zred positions are in the mask on pixel %s" % (self.hpix_logstr))
+                    return False
         else:
             # We do not have an input catalog
             # we must not have a seedfile, and did_read_zreds
             # so generate a cluster catalog from self.gals
 
-            use,=np.where((self.gals.zred >= self.config.zrange[0]) &
-                          (self.gals.zred <= self.config.zrange[1]))
+            cuse = ((self.gals.zred >= self.config.zrange[0]) &
+                    (self.gals.zred <= self.config.zrange[1]))
+
+            if self.cutgals_chisqmax:
+                cuse &= (self.gals.chisq < self.config.chisq_max)
+
+            use, = np.where(cuse)
 
             if use.size == 0:
-                self.fail = True
-                return
+                self.cat = None
+                self.config.logger.info("No usable zred inputs for firstpass on pixel %s" % (self.hpix_logstr))
+                return False
 
             mstar = self.zredstr.mstar(self.gals.zred[use])
             mlim = mstar - 2.5 * np.log10(self.config.lval_reference)
@@ -184,8 +206,9 @@ class RunFirstPass(ClusterRunner):
             good, = np.where(self.gals.refmag[use] < mlim)
 
             if good.size == 0:
-                self.fail = True
-                return
+                self.cat = None
+                self.config.logger.info("No good zred inputs for firstpass on pixel %s" % (self.hpix_logstr))
+                return False
 
             self.cat = ClusterCatalog.zeros(good.size,
                                             zredstr=self.zredstr,
@@ -222,6 +245,8 @@ class RunFirstPass(ClusterRunner):
             self.maxiter = 1
 
         self.min_lambda = self.config.firstpass_minlambda
+
+        return True
 
     def _process_cluster(self, cluster):
         """

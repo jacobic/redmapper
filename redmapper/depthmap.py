@@ -59,7 +59,7 @@ class DepthMap(object):
         self.w = cov_hdr['W']
         self.eff = cov_hdr['EFF']
 
-        if config.d.hpix > 0:
+        if len(config.d.hpix) > 0:
             covpixels = get_healsparse_subpix_indices(config.d.nside, config.d.hpix,
                                                       config.border, nside_coverage)
         else:
@@ -211,7 +211,7 @@ class DepthMap(object):
             areas = np.zeros(mags.size) + self.config_area
             return areas
 
-        if self.subpix_hpix > 0:
+        if len(self.subpix_hpix) > 0:
             # for the subregion, we need the area covered in the main pixel
             # I'm not sure what to do about border...but you shouldn't
             # be running this with a subregion with a border

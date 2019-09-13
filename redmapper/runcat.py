@@ -116,6 +116,8 @@ class RunCatalog(ClusterRunner):
             if self.config.percolation_lmask < self.limlum:
                 self.limlum = self.config.percolation_lmask
 
+        return True
+
     def _process_cluster(self, cluster):
         """
         Process a single cluster with RunCatalog.

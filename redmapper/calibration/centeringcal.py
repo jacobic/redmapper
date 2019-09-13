@@ -159,11 +159,15 @@ class WcenCFitter(object):
            Negative likelihood to minimize
         """
         mbar = self._mstar + pars[0] + pars[1] * self._lamscale
-        phicen = (1./(np.sqrt(2.*np.pi) * pars[2])) * np.exp(-0.5*(self._refmag - mbar)**2. / (pars[2]**2.))
-        rho = self._pcen * phicen * self._cwt + self._psat * self._phi1 * self._cwt + (1. - self._pcen - self._psat) * self._bcounts
 
-        bad, = np.where((rho < 1e-5) | (~np.isfinite(rho)))
-        rho[bad] = 1e-5
+        with np.warnings.catch_warnings():
+            np.warnings.simplefilter("ignore")
+
+            phicen = (1./(np.sqrt(2.*np.pi) * pars[2])) * np.exp(-0.5*(self._refmag - mbar)**2. / (pars[2]**2.))
+            rho = self._pcen * phicen * self._cwt + self._psat * self._phi1 * self._cwt + (1. - self._pcen - self._psat) * self._bcounts
+
+            bad, = np.where((rho < 1e-5) | (~np.isfinite(rho)))
+            rho[bad] = 1e-5
 
         t = -np.sum(np.log(rho))
         if pars[2] < 0.0: t += 1000
@@ -432,7 +436,7 @@ class WcenCalibrator(object):
         wcenstr['lnw_cen_mean'] = wp[0]
         wcenstr['lnw_cen_sigma'] = wp[1]
         wcenstr['phi1_mmstar_m'] = self.phi1_mmstar_m
-        wcenstr['phi1_mmstar_slope'] = self.phi1_mmstar_m
+        wcenstr['phi1_mmstar_slope'] = self.phi1_mmstar_slope
         wcenstr['phi1_msig_m'] = self.phi1_msig_m
         wcenstr['phi1_msig_slope'] = self.phi1_msig_slope
 

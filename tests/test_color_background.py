@@ -79,7 +79,7 @@ class ColorBackgroundTestCase(unittest.TestCase):
         os.close(tfile[0])
         config.bkgfile_color = tfile[1]
         config.d.nside = 128
-        config.d.hpix = 8421
+        config.d.hpix = [8421]
         config.border = 0.0
 
         cbg = ColorBackgroundGenerator(config, minrangecheck=5)

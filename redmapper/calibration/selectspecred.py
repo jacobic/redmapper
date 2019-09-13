@@ -88,7 +88,7 @@ class SelectSpecRedGalaxies(object):
         gals.add_fields([('z', 'f4')])
         gals.z = spec[i0].z
 
-        self.config.logger.info("Calibrating with %d galaxies with spectra in pixel %d" % (gals.size, self.config.d.hpix))
+        self.config.logger.info("Calibrating with %d galaxies with spectra" % (gals.size))
 
         # Set the redshift range
         zrange = self.config.zrange_cushioned

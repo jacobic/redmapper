@@ -29,6 +29,7 @@ from .catalog import Catalog, Entry
 from .run_firstpass import RunFirstPass
 from .run_likelihoods import RunLikelihoods
 from .run_percolation import RunPercolation
+from .utilities import getMemoryString
 
 class RedmapperRun(object):
     """
@@ -173,7 +174,7 @@ class RedmapperRun(object):
             return (nside_test, subpixels)
 
         # start with the pixel and resolution in the config file
-        if self.config.d.hpix == 0:
+        if len(self.config.d.hpix) == 0:
             nside_splits = [self.config.calib_run_min_nside]
             pixels_splits = [self._get_subpixels(nside_splits[0], tab)]
         else:
@@ -195,7 +196,7 @@ class RedmapperRun(object):
             nside_splits.append(nside_test)
             pixels_splits.append(pixels_test)
 
-        test, = np.where(np.array(nsplit) <= self.config.calib_run_nproc)
+        test, = np.where(np.array(nsplit) <= self.config.calib_run_nproc*2)
         if test.size == 0:
             nside_split = nside_splits[0]
             pixels_split = pixels_splits[0]
@@ -229,7 +230,7 @@ class RedmapperRun(object):
         pixels = np.arange(hp.nside2npix(nside_test))
 
         # Which of these match the parent?
-        if self.config.d.hpix > 0:
+        if len(self.config.d.hpix) > 0:
             theta, phi = hp.pix2ang(nside_test, pixels)
             hpix_test = hp.ang2pix(self.config.d.nside, theta, phi)
             a, b = esutil.numpy_util.match(self.config.d.hpix, hpix_test)
@@ -394,7 +395,7 @@ class RedmapperRun(object):
         config.cosmo = Cosmo(H0=self._H0, omega_l=self._omega_l, omega_m=self._omega_m)
 
         # Set the specific config stuff here
-        config.d.hpix = hpix
+        config.d.hpix = [hpix]
 
         config.d.outbase = '%s_%d_%05d' % (self.config.d.outbase, self.config.d.nside, hpix)
 
@@ -408,7 +409,7 @@ class RedmapperRun(object):
             if (firstpass.cat is None or
                 (firstpass.cat is not None and firstpass.cat.size == 0)):
                 # We did not get a firstpass catalog
-                print("FAIL ON FIRSTPASS")
+                self.config.logger.info("Did not produce a firstpass catalog for pixel %d" % (hpix))
                 return (hpix, None, None, None)
 
             firstpass.output(savemembers=False, withversion=False, clobber=True)
@@ -425,7 +426,7 @@ class RedmapperRun(object):
             if (like.cat is None or
                 (like.cat is not None and like.cat.size == 0)):
                 # We did not get a likelihood catalog
-                print("FAIL ON LIKE")
+                self.config.logger.info("Did not produce a likelihood catalog for pixel %d" % (hpix))
                 return (hpix, firstpass.filename, None, None)
 
             like.output(savemembers=False, withversion=False, clobber=True)
@@ -442,7 +443,7 @@ class RedmapperRun(object):
             if (perc.cat is None or
                 (perc.cat is not None and perc.cat.size == 0)):
                 # We did not get a percolation catalog
-                print("FAIL ON PERC")
+                self.config.logger.info("Did not produce a percolation catalog for pixel %d" % (hpix))
                 return (hpix, firstpass.filename, like.filename, None)
 
             perc.output(savemembers=True, withversion=False, clobber=True)
@@ -472,16 +473,24 @@ class RedmapperRun(object):
            Filename for percolation file.
         """
 
+        self.config.logger.info("Running percolation on pixel %d" % (hpix))
+
         config = self.config.copy()
         config.cosmo = Cosmo(H0=self._H0, omega_l=self._omega_l, omega_m=self._omega_m)
 
-        config.d.hpix = hpix
+        config.d.hpix = [hpix]
 
         config.d.outbase = '%s_%05d' % (self.config.d.outbase, hpix)
 
         perc = RunPercolation(config)
         if not os.path.isfile(perc.filename) or not self.check:
             perc.run(keepz=self.keepz, cleaninput=self.cleaninput)
+
+            if (perc.cat is None or
+                (perc.cat is not None and perc.cat.size == 0)):
+                # we did not get a percolation catalog
+                self.config.logger.info("Did not produce a percolation catalog for pixel %d" % (hpix))
+                return (hpix, None, None, None)
             perc.output(savemembers=True, withversion=False, clobber=True)
 
         return (hpix, None, None, perc.filename)

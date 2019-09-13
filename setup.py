@@ -47,10 +47,6 @@ chisq_dist_module = Extension('redmapper.chisq_dist._chisq_dist_pywrap',
                               include_dirs=include_dirs)
 ext_modules.append(chisq_dist_module)
 
-# data files
-initcolorfiles = glob.glob('data/initcolors/*.fit')
-mstarfiles = glob.glob('data/mstar/*.fit')
-
 class CleanCommand(Command):
     """Custom clean command to tidy up the project root."""
     user_options = []
@@ -74,8 +70,7 @@ setup(
     scripts=scripts,
     install_requires=['numpy'],
     packages=find_packages(exclude=('tests', 'docs')),
-    data_files=[('redmapper/data/initcolors', initcolorfiles),
-                ('redmapper/data/mstar', mstarfiles)],
+    include_package_data=True,
     cmdclass={'clean': CleanCommand}
 )
 

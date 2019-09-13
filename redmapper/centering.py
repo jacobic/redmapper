@@ -188,7 +188,9 @@ class CenteringWcenZred(Centering):
 
         lum = 10.**((self.cluster.mstar - self.cluster.neighbors.refmag) / (2.5))
 
-        w = np.zeros(use.size)
+        # Put a floor on w when we have a strange candidate at the edge that doesn't
+        # match any good galaxies
+        w = np.zeros(use.size) + 1e-3
         for i in xrange(use.size):
             # need to filter on r_lambda...
             subgal, = np.where(i1 == i)

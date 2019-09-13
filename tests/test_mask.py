@@ -62,7 +62,7 @@ class MaskTestCase(unittest.TestCase):
 
         # And test that we're getting the right numbers from a sub-mask
         config2 = Configuration(file_path + "/" + conf_filename)
-        config2.d.hpix = 582972
+        config2.d.hpix = [582972]
         config2.d.nside = 1024
         config2.border = 0.02
         mask2 = get_mask(config2)

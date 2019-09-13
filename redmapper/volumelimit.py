@@ -79,7 +79,7 @@ class VolumeLimitMask(object):
         cov_hdr = fitsio.read_header(self.vlimfile, ext='COV')
         nside_coverage = cov_hdr['NSIDE']
 
-        if self.config.d.hpix > 0:
+        if len(self.config.d.hpix) > 0:
             covpixels = get_healsparse_subpix_indices(self.config.d.nside, self.config.d.hpix,
                                                       self.config.border, nside_coverage)
         else:

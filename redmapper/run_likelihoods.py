@@ -102,7 +102,7 @@ class RunLikelihoods(ClusterRunner):
 
         self.cleaninput = kwargs.pop('cleaninput', False)
 
-        self.config.logger.info("%d: Likelihoods using catfile: %s" % (self.config.d.hpix, self.config.catfile))
+        self.config.logger.info("%s: Likelihoods using catfile: %s" % (self.hpix_logstr, self.config.catfile))
 
         self.cat = ClusterCatalog.from_catfile(self.config.catfile,
                                                zredstr=self.zredstr,
@@ -124,11 +124,31 @@ class RunLikelihoods(ClusterRunner):
                         (self.cat.z < zrange[1]) &
                         (self.cat.Lambda > 0.0))
 
-        self.cat = self.cat[use]
+        if use.size == 0:
+            self.cat = None
+            self.config.logger.info("No usable inputs for likelihood on pixel %s" % (self.hpix_logstr))
+            return False
+
+        mstar = self.zredstr.mstar(self.cat.z[use])
+        mlim = mstar - 2.5 * np.log10(self.limlum)
+
+        good, = np.where(self.cat.refmag[use] < mlim)
+
+        if good.size == 0:
+            self.cat = None
+            self.config.logger.info("No good inputs for likelihood on pixel %s" % (self.hpix_logstr))
+            return False
+
+        self.cat = self.cat[use[good]]
 
         if self.cleaninput:
             catmask = self.mask.compute_radmask(self.cat.ra, self.cat.dec)
             self.cat = self.cat[catmask]
+
+            if self.cat.size == 0:
+                self.cat = None
+                self.config.logger.info("No input cluster positions are in the mask on pixel %s" % (self.hpix_logstr))
+                return False
 
         self.do_lam_plusminux = False
         self.match_centers_to_galaxies = False
@@ -136,7 +156,7 @@ class RunLikelihoods(ClusterRunner):
         self.do_correct_zlambda = False
         self.do_pz = False
 
-        #self.limlum = np.clip(self.config.lval_reference - 0.1, 0.01, None)
+        return True
 
     def _reset_bad_values(self, cluster):
         """
@@ -212,7 +232,10 @@ class RunLikelihoods(ClusterRunner):
             sig = self.config.lnw_cen_sigma / np.sqrt(((np.clip(cluster.Lambda, None, self.config.wcen_maxlambda)) / cluster.scaleval) / self.config.wcen_pivot)
             fw = (1. / (np.sqrt(2. * np.pi) * sig)) * np.exp(-0.5 * (np.log(w) - self.config.lnw_cen_mean)**2. / (sig**2.))
 
-            cluster.lnbcglike = np.log(phi_cen * g * fw)
+            with np.warnings.catch_warnings():
+                np.warnings.simplefilter("error")
+
+                cluster.lnbcglike = np.log(phi_cen * g * fw)
 
             cluster.lnlike = cluster.lnbcglike + cluster.lnlamlike
 
@@ -230,4 +253,4 @@ class RunLikelihoods(ClusterRunner):
         use, = np.where(self.cat.lnlamlike > -1e11)
         self.cat = self.cat[use]
 
-        # should I delete unused columns here before saving?  
+        # should I delete unused columns here before saving?

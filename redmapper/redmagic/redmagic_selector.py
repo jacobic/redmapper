@@ -49,7 +49,10 @@ class RedmagicSelector(object):
             for ext in xrange(self.n_modes):
                 data = Entry(fits[ext + 1].read())
 
-                name = data.name.decode().rstrip()
+                try:
+                    name = data.name.decode().rstrip()
+                except AttributeError:
+                    name = data.name.rstrip()
 
                 self.calib_data[name] = data
 
@@ -61,7 +64,10 @@ class RedmagicSelector(object):
             self.vlim_masks = OrderedDict()
 
             for mode in self.modes:
-                vmaskfile = self.calib_data[mode].vmaskfile.decode().rstrip()
+                try:
+                    vmaskfile = self.calib_data[mode].vmaskfile.decode().rstrip()
+                except AttributeError:
+                    vmaskfile = self.calib_data[mode].vmaskfile.rstrip()
                 if vmaskfile == '':
                     # There is no vmaskfile, we need to do a fixed area one
                     self.vlim_masks[mode] = VolumeLimitMaskFixed(self.config)

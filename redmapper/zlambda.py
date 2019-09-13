@@ -429,8 +429,6 @@ class Zlambda(object):
             else:
                 if (convergence_warning):
                     self.config.logger.info('Warning: z_lambda / p(z) inconsistency detected.')
-                    #if ((z_lambda < 0.4) & (self.cluster_parent.Lambda > 20.0) & (self.cluster_parent.scaleval < 2.0) & (z_lambda > 0.15)):
-                    #    asdfjlsdfjkl
 
                 # Record the new peak z_lambda and kick back out saying that p(z) isn't done
                 z_lambda = self.pzbins[pmind]

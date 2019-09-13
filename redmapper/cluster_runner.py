@@ -31,6 +31,7 @@ from .zlambda import Zlambda
 from .zlambda import ZlambdaCorrectionPar
 from .redsequence import RedSequenceColorPar
 from .depth_fitting import DepthLim
+from .utilities import getMemoryString
 
 ###################################################
 # Order of operations:
@@ -206,9 +207,18 @@ class ClusterRunner(object):
         # Cut the input galaxy file
         self.gals = self.gals[guse]
 
+        if len(self.gals) == 0:
+            self.config.logger.info("No good galaxies for %s in pixel %s" %
+                                    (self.runmode, self.hpix_logstr))
+            return False
+
         # If we don't have a depth map, get ready to compute local depth
         if self.depthstr is None:
-            self.depthlim = DepthLim(self.gals.refmag, self.gals.refmag_err)
+            try:
+                self.depthlim = DepthLim(self.gals.refmag, self.gals.refmag_err)
+            except RuntimeError:
+                self.config.logger.info("Failed to obtain depth info in %s for pixel %s with %d galaxies.  Skipping pixel." % (self.runmode, self.hpix_logstr, len(self.gals)))
+                return False
 
         # default limiting luminosity
         self.limlum = np.clip(self.config.lval_reference - 0.1, 0.01, None)
@@ -225,6 +235,13 @@ class ClusterRunner(object):
         self.do_correct_zlambda = False
         self.do_pz = False
 
+        if len(self.config.d.hpix) == 0:
+            self.hpix_logstr = "-1"
+        else:
+            self.hpix_logstr = ", ".join(str(x) for x in self.config.d.hpix)
+
+        return True
+
     def _more_setup(self, *args, **kwargs):
         """
         Additional setup for derived ClusterRunner classes.
@@ -234,7 +251,7 @@ class ClusterRunner(object):
         # This is to be overridden if necessary
         # this can receive all the keywords.
 
-        pass
+        return True
 
     def _generate_mem_match_ids(self):
         """
@@ -279,10 +296,16 @@ class ClusterRunner(object):
         """
 
         # General setup
-        self._setup()
+        if not self._setup():
+            self.config.logger.info("Cluster initialization failed on pixel %s. No catalog will be produced." % (self.hpix_logstr))
+            self.cat = None
+            return
 
         # Setup specific for a given task.  Will read in the galaxy catalog.
-        self._more_setup(*args, **kwargs)
+        if not self._more_setup(*args, **kwargs):
+            self.config.logger.info("Cluster initialization failed on pixel %s. No catalog will be produced." % (self.hpix_logstr))
+            self.cat = None
+            return
 
         # Match centers and galaxies if required
         if self.match_centers_to_galaxies:
@@ -330,7 +353,7 @@ class ClusterRunner(object):
                 cluster.maskgal_index = self.mask.select_maskgals_sample()
 
                 if ((cctr % 1000) == 0):
-                    self.config.logger.info("%d: Working on cluster %d of %d" % (self.config.d.hpix, cctr, self.cat.size))
+                    self.config.logger.info("%s: Working on cluster %d of %d" % (self.hpix_logstr, cctr, self.cat.size))
                 cctr += 1
 
                 # Note that the cluster is set with .z if available! (which becomes .redshift)

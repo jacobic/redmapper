@@ -10,6 +10,7 @@ import healpy as hp
 import tempfile
 import shutil
 import os
+import esutil
 
 from redmapper import Configuration
 from redmapper import GalaxyCatalog
@@ -37,15 +38,24 @@ class GalaxyCatalogTestCase(unittest.TestCase):
         testing.assert_equal(gals_all.size, 14449)
 
         # read in a subregion, no border
+        hpix = 2163
         gals_sub = GalaxyCatalog.from_galfile(file_path + '/' + galfile,
-                                              hpix=2163, nside=64)
+                                              hpix=hpix, nside=64)
 
         theta = (90.0 - gals_all.dec) * np.pi/180.
         phi = gals_all.ra * np.pi/180.
         ipring_all = hp.ang2pix(64, theta, phi)
-        use, = np.where(ipring_all == 2163)
+        use, = np.where(ipring_all == hpix)
 
         testing.assert_equal(gals_sub.size, use.size)
+
+        # Read in a subregion that's made of two pixels, no border
+        hpix = [2163, 2296]
+        gals_sub = GalaxyCatalog.from_galfile(file_path + '/' + galfile,
+                                              hpix=hpix, nside=64)
+        a, b = esutil.numpy_util.match(hpix, ipring_all)
+
+        testing.assert_equal(gals_sub.size, a.size)
 
         # read in a subregion, with border
         gals_sub = GalaxyCatalog.from_galfile(file_path + '/' + galfile,
@@ -109,7 +119,11 @@ class GalaxyCatalogTestCase(unittest.TestCase):
         self.assertEqual(tab.filenames.size, tab2.filenames.size)
 
         for filename in tab2.filenames:
-            self.assertTrue(os.path.isfile(os.path.join(self.test_dir, filename.decode())))
+            try:
+                fname = os.path.join(self.test_dir, filename.decode())
+            except AttributeError:
+                fname = os.path.join(self.test_dir, filename)
+            self.assertTrue(os.path.isfile(fname))
 
         # Test 2: Make a catalog that has an incomplete dtype
         dtype = [('id', 'i8'),

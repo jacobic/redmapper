@@ -1,5 +1,5 @@
-astropy<3.0
-matplotlib<3.0
+astropy
+matplotlib
 sphinx
 nose
 pyyaml

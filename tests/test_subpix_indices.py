@@ -22,7 +22,7 @@ class SubpixIndexTestCase(unittest.TestCase):
 
         # Test with no border...
         subpix_nside = 2
-        subpix_hpix = 16
+        subpix_hpix = [16]
         subpix_border = 0.0
         coverage_nside = 32
 
@@ -35,15 +35,30 @@ class SubpixIndexTestCase(unittest.TestCase):
         theta, phi = hp.pix2ang(coverage_nside, covpix, nest=True)
         ipring = hp.ang2pix(subpix_nside, theta, phi)
 
-        testing.assert_equal(ipring, subpix_hpix)
+        testing.assert_equal(ipring, subpix_hpix[0])
+
+        covpix_temp = covpix
+
+        # Test with two pixels
+        subpix_hpix = [16, 17]
+
+        covpix = get_healsparse_subpix_indices(subpix_nside, subpix_hpix, subpix_border, coverage_nside)
+
+        # Test that they are all in the correct pixel
+        theta, phi = hp.pix2ang(coverage_nside, covpix, nest=True)
+        ipring = hp.ang2pix(subpix_nside, theta, phi)
+
+        testing.assert_equal(ipring[0: 256], subpix_hpix[0])
+        testing.assert_equal(ipring[256: ], subpix_hpix[1])
 
         # Test with border (most typical value)...
+        subpix_hpix = [16]
         subpix_border = 2.5
 
         covpix2 = get_healsparse_subpix_indices(subpix_nside, subpix_hpix, subpix_border, coverage_nside)
 
         # There should be more of these pixels
-        self.assertTrue(covpix2.size > covpix.size)
+        self.assertTrue(covpix2.size > covpix_temp.size)
 
         theta2, phi2 = hp.pix2ang(coverage_nside, covpix2, nest=True)
 
@@ -58,6 +73,8 @@ class SubpixIndexTestCase(unittest.TestCase):
         test, = np.where(dist > 0.0)
         self.assertTrue(test.size > 0)
 
+        # Note that border + multiple pixels is not supported.
+
     def test_subpix_nside_eq_cov_nside(self):
         """
         Test when subpix_nside is equal to coverage nside
@@ -65,7 +82,7 @@ class SubpixIndexTestCase(unittest.TestCase):
 
         # Test with no border
         subpix_nside = 32
-        subpix_hpix = 16
+        subpix_hpix = [16]
         subpix_border = 0.0
         coverage_nside = 32
 
@@ -80,7 +97,20 @@ class SubpixIndexTestCase(unittest.TestCase):
 
         testing.assert_equal(ipring, subpix_hpix)
 
+        # Test with two pixels
+        subpix_hpix = [16, 17]
+
+        covpix = get_healsparse_subpix_indices(subpix_nside, subpix_hpix, subpix_border, coverage_nside)
+
+        # Test that they are all in the correct pixel
+        theta, phi = hp.pix2ang(coverage_nside, covpix, nest=True)
+        ipring = hp.ang2pix(subpix_nside, theta, phi)
+
+        testing.assert_equal(ipring[0], subpix_hpix[0])
+        testing.assert_equal(ipring[1], subpix_hpix[1])
+
         # Test with border...
+        subpix_hpix = [16]
         subpix_border = 2.5
 
         covpix2 = get_healsparse_subpix_indices(subpix_nside, subpix_hpix, subpix_border, coverage_nside)
@@ -108,7 +138,7 @@ class SubpixIndexTestCase(unittest.TestCase):
 
         # Test with no border...
         subpix_nside = 128
-        subpix_hpix = 16
+        subpix_hpix = [16]
         subpix_border = 0.0
         coverage_nside = 32
 
@@ -123,7 +153,22 @@ class SubpixIndexTestCase(unittest.TestCase):
 
         testing.assert_equal(covpix, ipnest)
 
+        # Test with two pixels
+        subpix_hpix = [16, 17]
+
+        covpix = get_healsparse_subpix_indices(subpix_nside, subpix_hpix, subpix_border, coverage_nside)
+
+        # Test that we have the right number
+        testing.assert_equal(covpix.size, 2)
+
+        # Test that they are all in the correct pixel
+        theta, phi = hp.pix2ang(subpix_nside, subpix_hpix)
+        ipnest = hp.ang2pix(coverage_nside, theta, phi, nest=True)
+
+        testing.assert_equal(covpix, ipnest)
+
         # Test with border...
+        subpix_hpix = [16]
         subpix_border = 2.5
 
         covpix2 = get_healsparse_subpix_indices(subpix_nside, subpix_hpix, subpix_border, coverage_nside)
