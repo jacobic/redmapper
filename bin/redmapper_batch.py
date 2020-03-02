@@ -202,6 +202,8 @@ with open(jobfile, 'w') as jf:
         jf.write("#SBATCH -t=%d:00:00\n" % (int(walltime / 60)))
         jf.write("#SBATCH --mem %dmb\n" % (memory/n_nodes))
         jf.write("#SBATCH -J %s[1-%d]\n" % (jobname, hpix_run.size))
+
+        index_string = '${pixarr[SLURM_ARRAY_TASK_ID-1]}'
     else:
         # Nothing else supported
         raise RuntimeError("Only LSF, PBS and SLURM supported at this time.")
