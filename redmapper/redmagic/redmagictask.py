@@ -85,6 +85,8 @@ l           Output path.  Default is None, use same absolute
         started = [False] * n_modes
 
         self.config.logger.info("Making redMaGiC selection for %d modes and %d pixels" % (n_modes, tab.hpix.size))
+        if self.config.has_truth:
+            self.config.logger.info("Using truth information for zspec")
 
         for i, pix in enumerate(tab.hpix):
             gals = GalaxyCatalog.from_galfile(self.config.galfile,
@@ -92,7 +94,7 @@ l           Output path.  Default is None, use same absolute
                                               nside=tab.nside,
                                               hpix=pix,
                                               border=0.0,
-                                              truth=self.config.redmagic_mock_truthspec)
+                                              truth=self.config.has_truth)
 
             # Loop over all modes
             for j, mode in enumerate(modes):
@@ -120,8 +122,7 @@ l           Output path.  Default is None, use same absolute
                 nzplot.plot_redmagic_catalog(gals, mode, selector.calib_data[mode].etamin,
                                              selector.calib_data[mode].n0,
                                              selector.vlim_masks[mode].get_areas(),
-                                             zrange=selector.calib_data[mode].zrange,
-                                             sample=self.config.redmagic_calib_pz_integrate)
+                                             zrange=selector.calib_data[mode].zrange)
 
                 okspec, = np.where(gals.zspec > 0.0)
                 if okspec.size > 0:

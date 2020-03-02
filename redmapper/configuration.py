@@ -250,6 +250,8 @@ class Configuration(object):
     chisq_max = ConfigField(default=20.0, required=True)
     npzbins = ConfigField(default=21, required=True)
 
+    zred_nsamp = ConfigField(default=4, required=True)
+
     mstar_survey = ConfigField(default='sdss')
     mstar_band = ConfigField(default='i03')
 
@@ -372,15 +374,16 @@ class Configuration(object):
 
     redmagic_calib_nodesize = ConfigField(default=0.05, required=True)
     redmagic_calib_corr_nodesize = ConfigField(default=0.05, required=True)
+    redmagic_calib_buffer = ConfigField(default=0.05, required=True)
     redmagic_calib_zbinsize = ConfigField(default=0.02, required=True)
     redmagic_calib_chisqcut = ConfigField(default=20.0, required=True)
-    redmagic_calib_pz_integrate = ConfigField(default=True, required=True)
     redmagic_zrange = ConfigField(default=[], required=False, isArray=True)
     redmagic_calib_fractrain = ConfigField(default=0.5, required=True)
-    #redmagic_clean_nsig = ConfigField(default=0.0, required=True)
+    redmagic_calib_redshift_buffer = ConfigField(default=0.05, required=True)
     redmagic_maxlum = ConfigField(default=100.0, required=True)
     redmagic_mock_truthspec = ConfigField(default=False, required=True)
     redmagic_run_afterburner = ConfigField(default=True, required=True)
+    redmagic_apply_afterburner_zsamp = ConfigField(default=True, required=True)
     redmagic_n0s = ConfigField(default=[], required=True, isArray=True)
     redmagic_etas = ConfigField(default=[], required=True, isArray=True)
     redmagic_names = ConfigField(default=[], required=True, isList=True)

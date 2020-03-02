@@ -41,6 +41,8 @@ class RedmagicSelector(object):
         else:
             self.config = conf
 
+        redmagicfilepath = os.path.dirname(self.config.redmagicfile)
+
         self.calib_data = OrderedDict()
         with fitsio.FITS(self.config.redmagicfile) as fits:
             # Number of modes is number of binary extentions
@@ -68,16 +70,22 @@ class RedmagicSelector(object):
                     vmaskfile = self.calib_data[mode].vmaskfile.decode().rstrip()
                 except AttributeError:
                     vmaskfile = self.calib_data[mode].vmaskfile.rstrip()
+
                 if vmaskfile == '':
                     # There is no vmaskfile, we need to do a fixed area one
                     self.vlim_masks[mode] = VolumeLimitMaskFixed(self.config)
                 else:
-                    if os.path.isfile(vmaskfile):
-                        vmaskfile = vmaskfile
-                    elif os.path.isfile(os.path.join(self.config.configpath, vmaskfile)):
-                        vmaskfile = os.path.join(self.config.configpath, vmaskfile)
-                    else:
-                        raise RuntimeError("Could not find vmaskfile %s" % (vmaskfile))
+                    vmaskfile = os.path.join(redmagicfilepath,
+                                             os.path.basename(vmaskfile))
+                    if not os.path.isfile(vmaskfile):
+                        raise RuntimeError("Could not find vmaskfile %s.  Must be in same path as redmagic calibration file %s." % (vmaskfile, os.path.abspath(self.config.redmagicfile)))
+
+                    #if os.path.isfile(vmaskfile):
+                    #    vmaskfile = vmaskfile
+                    #elif os.path.isfile(os.path.join(self.config.configpath, vmaskfile)):
+                    #    vmaskfile = os.path.join(self.config.configpath, vmaskfile)
+                    #else:
+                    #    raise RuntimeError("Could not find vmaskfile %s" % (vmaskfile))
                     self.vlim_masks[mode] = VolumeLimitMask(self.config,
                                                             self.calib_data[mode].etamin,
                                                             vlimfile=vmaskfile)
@@ -123,10 +131,12 @@ class RedmagicSelector(object):
         # Which are the possibly red galaxies?
         lstar_cushion = calstr.lstar_cushion
         z_cushion = calstr.z_cushion
+        z_buffer = calstr.buffer
 
         mstar_init = self.zredstr.mstar(gals.zred_uncorr)
 
-        cut_zrange = [calstr.corr_zrange[0] - z_cushion, calstr.corr_zrange[1] + z_cushion]
+        cut_zrange = [calstr.cost_zrange[0] - z_cushion - z_buffer,
+                      calstr.cost_zrange[1] + z_cushion + z_buffer]
         minlstar = np.clip(np.min(calstr.etamin) - lstar_cushion, 0.1, None)
 
         red_poss_mask = ((gals.zred_uncorr > cut_zrange[0]) &
@@ -137,15 +147,28 @@ class RedmagicSelector(object):
         # Creates a new catalog...
         zredmagic = np.copy(gals.zred_uncorr)
         zredmagic_e = np.copy(gals.zred_uncorr_e)
+        try:
+            zredmagic_samp = np.copy(gals.zred_samp)
+        except (ValueError, AttributeError) as e:
+            # Sample from zred + zred_e (not optimal, for old catalogs)
+            zredmagic_samp = np.zeros((zredmagic.size, 1))
+            zredmagic_samp[:, 0] = np.random.normal(loc=zredmagic,
+                                                    scale=zredmagic_e,
+                                                    size=zredmagic.size)
 
-        spl = CubicSpline(calstr.nodes, calstr.cmax)
+        spl = CubicSpline(calstr.nodes, calstr.cmax, fixextrap=True)
         chi2max = np.clip(spl(gals.zred_uncorr), 0.1, calstr.maxchi)
 
         if calstr.run_afterburner:
-            spl = CubicSpline(calstr.corrnodes, calstr.bias)
-            zredmagic -= spl(gals.zred_uncorr)
+            spl = CubicSpline(calstr.corrnodes, calstr.bias, fixextrap=True)
+            offset = spl(gals.zred_uncorr)
+            zredmagic -= offset
 
-            spl = CubicSpline(calstr.corrnodes, calstr.eratio)
+            if calstr.apply_afterburner:
+                for i in range(zredmagic_samp.shape[1]):
+                    zredmagic_samp[:, i] -= offset
+
+            spl = CubicSpline(calstr.corrnodes, calstr.eratio, fixextrap=True)
             zredmagic_e *= spl(gals.zred_uncorr)
 
         # Compute mstar
@@ -171,6 +194,7 @@ class RedmagicSelector(object):
                                                                   ('lum', 'f4'),
                                                                   ('zredmagic', 'f4'),
                                                                   ('zredmagic_e', 'f4'),
+                                                                  ('zredmagic_samp', 'f4', self.config.zred_nsamp),
                                                                   ('chisq', 'f4'),
                                                                   ('zspec', 'f4')]))
 
@@ -189,6 +213,7 @@ class RedmagicSelector(object):
         redmagic_catalog.mag_err[:, :] = gals.mag_err[gd, :]
         redmagic_catalog.zredmagic = zredmagic[gd]
         redmagic_catalog.zredmagic_e = zredmagic_e[gd]
+        redmagic_catalog.zredmagic_samp = zredmagic_samp[gd, :]
         redmagic_catalog.chisq = gals.chisq[gd]
 
         # Compute the luminosity

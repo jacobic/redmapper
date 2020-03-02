@@ -235,7 +235,7 @@ class RunLikelihoods(ClusterRunner):
             with np.warnings.catch_warnings():
                 np.warnings.simplefilter("error")
 
-                cluster.lnbcglike = np.log(phi_cen * g * fw)
+                cluster.lnbcglike = np.log(phi_cen * np.clip(g, 1e-10, None) * fw)
 
             cluster.lnlike = cluster.lnbcglike + cluster.lnlamlike
 
@@ -248,9 +248,13 @@ class RunLikelihoods(ClusterRunner):
 
         This will select clusters where they have a valid likelihood computed.
         """
+
         # For this catalog we're cutting on failed likelihood
 
         use, = np.where(self.cat.lnlamlike > -1e11)
-        self.cat = self.cat[use]
+
+        # Make a new catalog that doesn't have the extra memory usage
+        # from catalogs and neighbors
+        self.cat = ClusterCatalog(self.cat._ndarray[use])
 
         # should I delete unused columns here before saving?

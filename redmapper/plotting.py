@@ -115,7 +115,7 @@ class SpecPlot(object):
                                 figure_return=figure_return)
 
     def plot_values(self, z_spec, z_phot, z_phot_e, name='z_\lambda', specname='z_{\mathrm{spec}}',
-                    title=None, figure_return=False):
+                    title=None, figure_return=False, calib_zrange=None):
         """
         Make a pretty spectrscopic plot from an arbitrary list of values.
 
@@ -133,6 +133,8 @@ class SpecPlot(object):
            Title string.  Default is None
         figure_return: `bool`, optional
            Return the figure instead of saving a png.  Default is False.
+        calib_zrange: `np.array` or `list`
+           2-element array with calibration redshift range to mark.  Default is None.
 
         Returns
         -------
@@ -180,7 +182,13 @@ class SpecPlot(object):
         minorLocator = MultipleLocator(0.02)
         ax.xaxis.set_minor_locator(minorLocator)
         ax.set_ylabel(r'$%s$' % (specname), fontsize=16)
- 
+
+        if calib_zrange is not None:
+            if len(calib_zrange) == 2:
+                ylim = ax.get_ylim()
+                ax.plot([calib_zrange[0], calib_zrange[0]], ylim, 'k:')
+                ax.plot([calib_zrange[1], calib_zrange[1]], ylim, 'k:')
+
         # Plot the outliers
         bad, = np.where(np.abs(z_phot[use] - z_spec[use]) / z_phot_e[use] > self.nsig)
         if bad.size > 0:
@@ -221,6 +229,13 @@ class SpecPlot(object):
 
         ax2.set_xlim(plot_xrange)
         ax2.set_ylim([-0.03, 0.024])
+
+        if calib_zrange is not None:
+            if len(calib_zrange) == 2:
+                ylim = ax.get_ylim()
+                ax2.plot([calib_zrange[0], calib_zrange[0]], [-0.03, 0.024], 'k:')
+                ax2.plot([calib_zrange[1], calib_zrange[1]], [-0.03, 0.024], 'k:')
+
         ax2.tick_params(axis='both', which='major', labelsize=14, length=5, left=True, right=True, top=True, bottom=True, direction='in')
         ax2.tick_params(axis='y', which='minor', left=True, right=True, direction='in')
         ax2.tick_params(axis='x', which='minor', bottom=True, top=True, direction='in')
@@ -411,7 +426,7 @@ class NzPlot(object):
                      redmapper_name='nz')
 
     def plot_nz(self, z, areastr, zrange, xlabel=None, ylabel=None,
-                title=None, redmapper_name='nz'):
+                title=None, redmapper_name='nz', calib_zrange=None):
         """
         Plot the n(z) for an arbitrary list of objects
 
@@ -431,30 +446,11 @@ class NzPlot(object):
            Plot title.  Default is None.
         redmapper_name: `str`, optional
            Name to put into filename.  Default is 'nz'
+        calib_zrange: `np.array` or `list`
+           Calibration redshift range to overplot
         """
 
         import matplotlib.pyplot as plt
-
-        """
-        corr_zrange = copy.copy(zrange)
-        nbin = int(np.ceil((corr_zrange[1] - corr_zrange[0]) / self.binsize))
-        corr_zrange[1] = nbin * self.binsize + corr_zrange[0]
-        if corr_zrange[1] > zrange[1]:
-            corr_zrange[1] -= self.binsize
-            nbin -= 1
-
-        hist = esutil.stat.histogram(z, min=corr_zrange[0], max=corr_zrange[1]-0.0001, binsize=self.binsize, more=True)
-        h = hist['hist']
-        zbins = hist['center']
-
-        indices = np.clip(np.searchsorted(areastr.z, zbins), 0, areastr.size - 1)
-
-        vol = np.zeros(zbins.size)
-        for i in xrange(zbins.size):
-            vol[i] = (self.config.cosmo.V(zbins[i] - self.binsize/2.,
-                                          zbins[i] + self.binsize/2.) *
-                      (areastr.area[indices[i]] / 41252.961))
-                      """
 
         hist = esutil.stat.histogram(z, min=zrange[0], max=zrange[1]-0.0001, binsize=self.binsize, more=True)
         h = hist['hist']
@@ -471,12 +467,15 @@ class NzPlot(object):
         dens = h.astype(np.float32) / vol
         err = np.sqrt(dens * vol) / vol
 
+        u, = np.where((dens > 0.0) & (err > 0.0))
+        u2, = np.where((dens[u] / err[u]) > 5.0)
+
         fig = plt.figure(1, figsize=(8, 6))
         fig.clf()
 
         ax = fig.add_subplot(111)
 
-        ax.errorbar(zbins, dens*1e4, yerr=err*1e4, fmt='r.', markersize=8)
+        ax.errorbar(zbins[u[u2]], dens[u[u2]]*1e4, yerr=err[u[u2]]*1e4, fmt='r.', markersize=8)
         if xlabel is not None:
             ax.set_xlabel(xlabel, fontsize=16)
         if ylabel is not None:
@@ -484,13 +483,21 @@ class NzPlot(object):
         if title is not None:
             ax.set_title(title, fontsize=16)
         ax.tick_params(axis='both',which='major',labelsize=14)
+
+        if calib_zrange is not None:
+            if len(calib_zrange) == 2:
+                ylim = ax.get_ylim()
+                ax.plot([calib_zrange[0], calib_zrange[0]], ylim, 'k:')
+                ax.plot([calib_zrange[1], calib_zrange[1]], ylim, 'k:')
+
         fig.tight_layout()
 
         self._redmapper_name = redmapper_name
         fig.savefig(self.filename)
         plt.close(fig)
 
-    def plot_redmagic_catalog(self, cat, name, eta, n0, areastr, sample=True, zrange=None, extraname=None):
+    def plot_redmagic_catalog(self, cat, name, eta, n0, areastr, sample=True,
+                              zrange=None, calib_zrange=None, extraname=None):
         """
         Plot the n(z) for a redmagic catalog.
 
@@ -510,14 +517,14 @@ class NzPlot(object):
            Sample the p(z)s? Default is True.
         zrange: `np.array` or `list`, optional
            Redshift range to plot.  Default is None (full range)
+        calib_zrange: `np.array` or `list`, optional
+           Redshift range used for calibration to overplot.  Default is None.
         extraname: `str`, optional
            Extra name to insert (E.g. 'calib').  Default is None
         """
 
-        if sample:
-            zsamp = np.random.normal(size=cat.size) * cat.zredmagic_e + cat.zredmagic
-        else:
-            zsamp = cat.zredmagic
+        # Take the first sample
+        zsamp = cat.zredmagic_samp[:, 0]
 
         if zrange is None:
             zrange = self.config.redmagic_zrange
@@ -531,7 +538,8 @@ class NzPlot(object):
                      xlabel=r'$z_{\mathrm{redmagic}}$',
                      ylabel=r'$n\,(1e4\,\mathrm{galaxies} / \mathrm{Mpc}^{3})$',
                      title='%s: %3.1f-%02d' % (name, eta, int(n0)),
-                     redmapper_name=redmapper_name)
+                     redmapper_name=redmapper_name,
+                     calib_zrange=calib_zrange)
 
     @property
     def filename(self):

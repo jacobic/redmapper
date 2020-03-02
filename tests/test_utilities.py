@@ -81,6 +81,34 @@ class AstroToSphereTestCase(unittest.TestCase):
         testing.assert_almost_equal(redmapper.utilities.astro_to_sphere(ra,dec),np.array([ 0.5936,  0.7003]),decimal=4)
 
 
+class RedGalInitialColorsTestCase(unittest.TestCase):
+    """
+    Tests of color(z) redmapper.utilities.RedGalInitialColors
+    """
+    def runTest(self):
+        """
+        Run tests of redmapper.utilities.RedGalInitialColors
+        """
+
+        # Make sure invalid file raises proper exception
+        self.assertRaises(IOError, redmapper.utilities.RedGalInitialColors, 'notafile')
+
+        # Make an SDSS test...
+        rg = redmapper.utilities.RedGalInitialColors('bc03_colors_sdss.fit')
+
+        redshifts = np.array([0.1, 0.2, 0.3, 0.4])
+
+        # Check that u-g (not there) raises an exception
+        self.assertRaises(ValueError, rg, 'u', 'g', redshifts)
+
+        gmr = rg('g', 'r', redshifts)
+        testing.assert_almost_equal(gmr, np.array([1.05341685, 1.3853203 , 1.65178809, 1.71100367]))
+        rmi = rg('r', 'i', redshifts)
+        testing.assert_almost_equal(rmi, np.array([0.42778724, 0.49461159, 0.57792853, 0.68157081]))
+        imz = rg('i', 'z', redshifts)
+        testing.assert_almost_equal(imz, np.array([0.35496065, 0.35439262, 0.35918364, 0.41805246]))
+
+
 class CicTestCase(unittest.TestCase):
     """
     Tests of redmapper.utilities.cic cloud-in-cell code.

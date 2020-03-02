@@ -11,7 +11,7 @@ import scipy.interpolate
 import copy
 
 from .galaxy import GalaxyCatalog
-from .utilities import interpol
+from .utilities import interpol, sample_from_pdf
 
 class ZredColor(object):
     """
@@ -219,6 +219,24 @@ class ZredColor(object):
             self._reset_bad_values(galaxy)
             return
 
+        # And sample the uncorrected p(z)
+        gdzbins, = np.where((dist > 1e-10) & (np.isfinite(dist)))
+
+        if gdzbins.size < 3:
+            # We cannot do a proper p(z)
+            zred_samp = np.zeros(galaxy.zred_samp.size) + zred
+        else:
+            pz = dist.copy()
+            n = scipy.integrate.simps(pz[gdzbins], self.zredstr.z[gdzbins])
+            pz /= n
+
+            pdf = scipy.interpolate.interp1d(self.zredstr.z[gdzbins], pz[gdzbins], kind='quadratic',
+                                             bounds_error=False, fill_value=0.0)
+            zred_samp = sample_from_pdf(pdf,
+                                        [self.zredstr.z[gdzbins[0]], self.zredstr.z[gdzbins[-1]]],
+                                        0.0001,
+                                        galaxy.zred_samp.size)
+
         # And apply the corrections
         zred2 = np.zeros(1) + zred
         zred2_e = np.zeros(1) + zred_e
@@ -258,6 +276,7 @@ class ZredColor(object):
         galaxy.zred2_e = zred2_e
         galaxy.zred_uncorr = zred_uncorr
         galaxy.zred_uncorr_e = zred_uncorr_e
+        galaxy.zred_samp = zred_samp
         galaxy.chisq = chisq
         galaxy.lkhd = lkhd
 

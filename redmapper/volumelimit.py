@@ -87,7 +87,7 @@ class VolumeLimitMask(object):
 
         self.sparse_vlimmap = healsparse.HealSparseMap.read(self.vlimfile, pixels=covpixels)
 
-        self.nside = self.sparse_vlimmap.nsideSparse
+        self.nside = self.sparse_vlimmap.nside_sparse
         self.subpix_nside = self.config.d.hpix
         self.subpix_hpix = self.config.d.nside
         self.subpix_border = self.config.border
@@ -126,21 +126,21 @@ class VolumeLimitMask(object):
         dtype_vlimmap = [('fracgood', 'f4'),
                          ('zmax', 'f4')]
 
-        sparse_vlimmap = healsparse.HealSparseMap.makeEmpty(sparse_depthmap.nsideCoverage,
-                                                            sparse_depthmap.nsideSparse,
-                                                            dtype=dtype_vlimmap,
-                                                            primary='fracgood')
+        sparse_vlimmap = healsparse.HealSparseMap.make_empty(sparse_depthmap.nside_coverage,
+                                                             sparse_depthmap.nside_sparse,
+                                                             dtype=dtype_vlimmap,
+                                                             primary='fracgood')
 
-        validPixels = sparse_depthmap.validPixels
-        depthValues = sparse_depthmap.getValuePixel(validPixels)
+        validPixels = sparse_depthmap.valid_pixels
+        depthValues = sparse_depthmap.get_values_pix(validPixels)
         vlimmap = np.zeros(validPixels.size, dtype=dtype_vlimmap)
         vlimmap['fracgood'] = depthValues['fracgood']
 
-        lo, = np.where(depthValues['m50'] < limmags.min())
+        lo, = np.where(depthValues['m50'] <= limmags.min())
         vlimmap['zmax'][lo] = zbins.min()
-        hi, = np.where(depthValues['m50'] > limmags.max())
+        hi, = np.where(depthValues['m50'] >= limmags.max())
         vlimmap['zmax'][hi] = zbins.max()
-        mid, = np.where((depthValues['m50'] >= limmags.min()) & (depthValues['m50'] <= limmags.max()))
+        mid, = np.where((depthValues['m50'] > limmags.min()) & (depthValues['m50'] < limmags.max()))
         if mid.size > 0:
             l = np.searchsorted(limmags, depthValues['m50'][mid], side='right')
             vlimmap['zmax'][mid] = zbins[l]
@@ -149,8 +149,8 @@ class VolumeLimitMask(object):
         for i, depthfile in enumerate(self.config.vlim_depthfiles):
             sparse_depthmap2, hdr2 = healsparse.HealSparseMap.read(depthfile, header=True)
 
-            validPixels2 = sparse_depthmap2.validPixels
-            depthValues2 = sparse_depthmap2.getValuePixel(validPixels2)
+            validPixels2 = sparse_depthmap2.valid_pixels
+            depthValues2 = sparse_depthmap2.get_values_pix(validPixels2)
 
             nsig = hdr2['NSIG']
             zp = hdr2['ZP']
@@ -180,20 +180,20 @@ class VolumeLimitMask(object):
                 if map_ind < ref_ind:
                     # Need to go blueward
                     for jj in xrange(ref_ind - 1, map_ind - 1, -1):
-                        limmags_temp += (zredstr.c[zinds, jj] + zredstr.slope[zinds, jj]) * (refmag_lim - zredstr.pivotmag[zinds])
+                        limmags_temp += (zredstr.c[zinds, jj] + zredstr.slope[zinds, jj] * (refmag_lim - zredstr.pivotmag[zinds]))
                 else:
                     # Need to go redward
                     for jj in xrange(ref_ind, map_ind):
-                        limmags_temp -= (zredstr.c[zinds, jj] + zredstr.slope[zinds, jj]) * (refmag_lim - zredstr.pivotmag[zinds])
+                        limmags_temp -= (zredstr.c[zinds, jj] + zredstr.slope[zinds, jj] * (refmag_lim - zredstr.pivotmag[zinds]))
 
             # adjust zmax with zmax_temp
             zmax_temp = np.zeros(vlimmap.size)
 
-            lo, = np.where(lim_mask < limmags_temp.min())
+            lo, = np.where(lim_mask <= limmags_temp.min())
             zmax_temp[lo] = zbins.min()
-            hi, = np.where(lim_mask > limmags_temp.max())
+            hi, = np.where(lim_mask >= limmags_temp.max())
             zmax_temp[hi] = zbins.max()
-            mid, = np.where((lim_mask >= limmags_temp.min()) & (lim_mask <= limmags_temp.max()))
+            mid, = np.where((lim_mask > limmags_temp.min()) & (lim_mask < limmags_temp.max()))
             if mid.size > 0:
                 l = np.searchsorted(limmags_temp, lim_mask[mid], side='right')
                 zmax_temp[mid] = zbins[l]
@@ -204,7 +204,7 @@ class VolumeLimitMask(object):
 
         gd, = np.where(vlimmap['zmax'] > zbins[0])
 
-        sparse_vlimmap.updateValues(validPixels[gd], vlimmap[gd])
+        sparse_vlimmap.update_values_pix(validPixels[gd], vlimmap[gd])
 
         sparse_vlimmap.write(self.vlimfile)
 
@@ -222,18 +222,18 @@ class VolumeLimitMask(object):
         dtype_vlimmap = [('fracgood', 'f4'),
                          ('zmax', 'f4')]
 
-        sparse_vlimmap = healsparse.HealSparseMap.makeEmpty(sparse_mask.nsideCoverage,
-                                                            sparse_mask.nsideSparse,
-                                                            dtype=dtype_vlimmap,
-                                                            primary='fracgood')
+        sparse_vlimmap = healsparse.HealSparseMap.make_empty(sparse_mask.nside_coverage,
+                                                             sparse_mask.nside_sparse,
+                                                             dtype=dtype_vlimmap,
+                                                             primary='fracgood')
 
-        validPixels = sparse_mask.validPixels
-        maskValues = sparse_mask.getValuePixel(validPixels)
+        validPixels = sparse_mask.valid_pixels
+        maskValues = sparse_mask.get_values_pix(validPixels)
         vlimmap = np.zeros(validPixels.size, dtype=dtype_vlimmap)
         vlimmap['fracgood'] = maskValues
         vlimmap['zmax'] = self.config.zrange[1]
 
-        sparse_vlimmap.updateValues(validPixels, vlimmap)
+        sparse_vlimmap.update_values_pix(validPixels, vlimmap)
 
         sparse_vlimmap.write(self.vlimfile)
 
@@ -261,7 +261,7 @@ class VolumeLimitMask(object):
         if (len(ras) != len(decs)):
             raise ValueError("ras, decs must be same length")
 
-        values = self.sparse_vlimmap.getValueRaDec(ras, decs)
+        values = self.sparse_vlimmap.get_values_pos(ras, decs, lonlat=True)
 
         if not get_fracgood:
             return np.clip(values['zmax'], 0.0, None)
@@ -288,11 +288,11 @@ class VolumeLimitMask(object):
 
         pixsize = hp.nside2pixarea(self.nside, degrees=True)
 
-        validPixels = self.sparse_vlimmap.validPixels
-        zmax = self.sparse_vlimmap.getValuePixel(validPixels)['zmax']
+        validPixels = self.sparse_vlimmap.valid_pixels
+        zmax = self.sparse_vlimmap.get_values_pix(validPixels)['zmax']
         st = np.argsort(zmax)
 
-        fracgoods = self.sparse_vlimmap.getValuePixel(validPixels)['fracgood'][st]
+        fracgoods = self.sparse_vlimmap.get_values_pix(validPixels)['fracgood'][st]
 
         inds = np.searchsorted(zmax[st], zbins, side='right')
 

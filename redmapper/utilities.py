@@ -17,6 +17,7 @@ from numpy import random
 import healpy as hp
 import esutil
 import sys
+import os
 import warnings
 
 ###################################
@@ -207,7 +208,6 @@ class MStar(object):
         except:
             raise IOError("Could not find mstar file mstar_%s_%s.fit" % (self.survey, self.band))
 
-        # Tom - why not use CubicSpline here? That's why it exists...
         self._f = CubicSpline(self._mstar_arr['Z'],self._mstar_arr['MSTAR'])
 
     def __call__(self, z):
@@ -228,6 +228,100 @@ class MStar(object):
         return self._f(z)
 
 
+#############################################
+## redgal initialization LUT code
+#############################################
+
+class RedGalInitialColors(object):
+    """
+    Class to describe the RedGalInitialColors(z, color) look-up table.
+    """
+
+    def __init__(self, redgal_template):
+        """
+        Instantiate a RedGalInitialColors object.
+
+        Parameters
+        ----------
+        redgal_template: `str`
+           Name of redgal_template file to get look-up table.
+        """
+
+        from . import Catalog
+        from pkg_resources import resource_filename
+        from pkg_resources import resource_exists
+
+        self._template_file = None
+
+        module = __name__.split('.')[0]
+        if resource_exists(module, 'data/initcolors/%s' % (redgal_template)):
+            self._template_file = resource_filename(module, 'data/initcolors/%s' % (redgal_template))
+        elif os.path.isfile(redgal_template):
+            self._template_file = os.path.abspath(redgal_template)
+        else:
+            raise IOError("Could not find redgal_template file %s in resource or path." % (redgal_template))
+
+        self._template = Catalog.from_fits_file(self._template_file, ext=1)
+        template_hdr = fitsio.read_header(self._template_file, ext=1)
+        self._template_bands = list(template_hdr['BANDS'].rstrip())
+
+        self._color_names = []
+        for i in range(len(self._template_bands) - 1):
+            self._color_names.append(self._color_name(self._template_bands[i],
+                                                      self._template_bands[i + 1]))
+
+    @property
+    def zmax(self):
+        return self._template.z.max()
+
+    def __call__(self, band1, band2, z):
+        """
+        Return the initial color guess (band1 - band2) at redshift z.
+
+        Parameters
+        ----------
+        band1: `str`
+           The first band in the color
+        band2: `str`
+           The second band in the color
+        z: `np.array`
+           Float array of redshifts
+
+        Returns
+        -------
+        color: `np.array`
+           Initial red galaxy color at redshifts z
+        """
+
+        name = self._color_name(band1, band2)
+        if name not in self._color_names:
+            raise ValueError("Color %s-%s not in initial template file %s." % (band1, band2,
+                                                                               self._template_file))
+
+        index = self._color_names.index(name)
+        return interpol(self._template.color[:, index], self._template.z, z)
+
+    def _color_name(self, band1, band2):
+        """
+        Return the color name associated with two bands.
+
+        Parameters
+        ----------
+        band1: `str`
+           The first band in the color
+        band2: `str`
+           The second band in the color
+
+        Returns
+        -------
+        colorname: `str`
+           Name of the color to use as a key.
+        """
+
+        name = '%s-%s' % (band1.upper(), band2.upper())
+        return name
+
+
 #############################################################
 ## cubic spline interpolation, based on Eddie Schlafly's code, from NumRec
 ##   http://faun.rc.fas.harvard.edu/eschlafly/apored/cubicspline.py
@@ -236,7 +330,7 @@ class CubicSpline(object):
     """
     CubicSpline interpolation class.
     """
-    def __init__(self, x, y, yp=None):
+    def __init__(self, x, y, yp=None, fixextrap=False):
         """
         Instantiate a CubicSpline object.
 
@@ -248,6 +342,9 @@ class CubicSpline(object):
            Float array of node values
         yp: `str`
            Type of spline.  Default is None, which is "natural"
+        fixextrap: `bool`, optional
+           Fix the extrapolation at the end of the node positions.
+           Default is False.
         """
         npts = len(x)
         mat = np.zeros((3, npts))
@@ -279,6 +376,8 @@ class CubicSpline(object):
             bb[-1] = yp[1]-1.*(y[-1]-y[-2])/(x[-1]-x[-2])
         y2 = solve_banded((1,1), mat, bb)
         self.x, self.y, self.y2 = (x, y, y2)
+
+        self.fixextrap = fixextrap
 
     def splint(self,x):
         """
@@ -319,7 +418,19 @@ class CubicSpline(object):
         y: `np.array`
            Spline interpolated values at x
         """
-        return self.splint(x)
+
+        if not self.fixextrap:
+            return self.splint(x)
+        else:
+            vals = self.splint(x)
+
+            lo, = np.where(x < self.x[0])
+            vals[lo] = self.y[0]
+
+            hi, = np.where(x > self.x[-1])
+            vals[hi] = self.y[-1]
+
+            return vals
 
 def calc_theta_i(mag, mag_err, maxmag, limmag):
     """

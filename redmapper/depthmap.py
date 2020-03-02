@@ -69,7 +69,7 @@ class DepthMap(object):
 
         self.galfile_nside = config.galfile_nside
         self.config_logger = config.logger
-        self.nside = self.sparse_depthmap.nsideSparse
+        self.nside = self.sparse_depthmap.nside_sparse
         self.config_area = config.area
 
         # Record the coverage of the subregion that we read
@@ -101,7 +101,12 @@ class DepthMap(object):
         if ras.size != decs.size:
             raise ValueError("ra, dec must be the same length")
 
-        values = self.sparse_depthmap.getValueRaDec(ras, decs)
+        values = self.sparse_depthmap.get_values_pos(ras, np.clip(decs, -90.0, 90.0), lonlat=True)
+
+        bad, = np.where(np.abs(decs) > 90.0)
+        values['limmag'][bad] = hp.UNSEEN
+        values['exptime'][bad] = hp.UNSEEN
+        values['m50'][bad] = hp.UNSEEN
 
         return (values['limmag'],
                 values['exptime'],
@@ -127,7 +132,10 @@ class DepthMap(object):
         if (ras.size != decs.size):
             raise ValueError("ra, dec must be the same length")
 
-        values = self.sparse_depthmap.getValueRaDec(ras, decs)
+        values = self.sparse_depthmap.get_values_pos(ras, np.clip(decs, -90.0, 90.0), lonlat=True)
+
+        bad, = np.where(np.abs(decs) > 90.0)
+        values['fracgood'][bad] = 0.0
 
         return values['fracgood']
 
@@ -161,8 +169,10 @@ class DepthMap(object):
         maskgals.zp[0] = self.zp
         maskgals.nsig[0] = self.nsig
 
-        maskgals.limmag, maskgals.exptime, maskgals.m50 = self.get_depth_values(ras, decs)
+        # Make sure the dec is within range, if we're going toward the pole (in sims)
+        gd, = np.where(np.abs(decs) < 90.0)
 
+        maskgals.limmag[gd], maskgals.exptime[gd], maskgals.m50[gd] = self.get_depth_values(ras[gd], decs[gd])
 
         bd = (maskgals.limmag < 0.0)
         ok = ~bd
@@ -220,13 +230,16 @@ class DepthMap(object):
 
             bitShift = 2 * int(np.round(np.log(self.nside / self.subpix_nside) / np.log(2)))
             nFinePerSub = 2**bitShift
-            ipnest = np.left_shift(hp.ring2nest(self.subpix_nside, self.subpix_hpix), bitShift) + np.arange(nFinePerSub)
+            ipnest = np.zeros(0, dtype=np.int64)
+            for hpix in self.subpix_hpix:
+                ipnest_temp = np.left_shift(hp.ring2nest(self.subpix_nside, hpix), bitShift) + np.arange(nFinePerSub)
+                ipnest = np.append(ipnest, ipnest_temp)
         else:
-            ipnest = self.sparse_depthmap.validPixels
+            ipnest = self.sparse_depthmap.valid_pixels
 
         areas = np.zeros(mags.size)
 
-        values = self.sparse_depthmap.getValuePixel(ipnest)
+        values = self.sparse_depthmap.get_values_pix(ipnest)
 
         gd, = np.where(values['m50'] > 0.0)
 
@@ -298,13 +311,13 @@ def convert_depthfile_to_healsparse(depthfile, healsparsefile, nsideCoverage, cl
             dtype_new.append(d)
             names.append(d[0])
 
-    sparseMap = healsparse.HealSparseMap.makeEmpty(nsideCoverage, nside, dtype_new, primary='fracgood')
+    sparseMap = healsparse.HealSparseMap.make_empty(nsideCoverage, nside, dtype_new, primary='fracgood')
 
     old_depth_sub = np.zeros(old_depth.size, dtype=dtype_new)
     for name in names:
         old_depth_sub[name] = old_depth[name]
 
-    sparseMap.updateValues(old_depth['hpix'], old_depth_sub, nest=old_hdr['nest'])
+    sparseMap.update_values_pix(old_depth['hpix'], old_depth_sub, nest=old_hdr['nest'])
 
     hdr = fitsio.FITSHDR()
     hdr['NSIG'] = old_hdr['NSIG']

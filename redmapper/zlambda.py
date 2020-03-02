@@ -110,6 +110,9 @@ class Zlambda(object):
             # the member selection / richness / and redshift
             i = 0
             while i < self.config.zlambda_maxiter:
+                if z_lambda < 0.0:
+                    break
+
                 # Update the redshift, and it also updates the neighbor r's
                 self.cluster.redshift = z_lambda
 
@@ -154,6 +157,9 @@ class Zlambda(object):
                     break
 
                 z_lambda = z_lambda_new
+
+                if z_lambda < 0.0:
+                    break
 
                 i += 1
 

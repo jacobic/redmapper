@@ -13,6 +13,8 @@ from ..run_firstpass import RunFirstPass
 from ..run_likelihoods import RunLikelihoods
 from ..run_percolation import RunPercolation
 
+from ..utilities import getMemoryString
+
 class RunRedmapperPixelTask(object):
     """
     Class to run redmapper on a single healpix pixel, for distributed runs.
@@ -87,6 +89,9 @@ class RunRedmapperPixelTask(object):
 
         self.config.catfile = firstpass.filename
 
+        # Clear out the firstpass memory
+        del firstpass
+
         like = RunLikelihoods(self.config)
 
         if not os.path.isfile(like.filename):
@@ -96,6 +101,9 @@ class RunRedmapperPixelTask(object):
             self.config.logger.info("Likelihood file %s already present.  Skipping..." % (like.filename))
 
         self.config.catfile = like.filename
+
+        # Clear out the likelihood memory
+        del like
 
         perc = RunPercolation(self.config)
 

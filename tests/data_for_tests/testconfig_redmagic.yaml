@@ -85,6 +85,6 @@ redmagic_calib_corr_nodesize: 0.2
 redmagic_calib_zbinsize: 0.2
 redmagic_calib_fractrain: 1.0
 redmagic_n0s: [10.0]
-redmagic_etas: [0.5]
+redmagic_etas: [0.45]
 redmagic_names: ['highdens']
 redmagic_zmaxes: [0.45]

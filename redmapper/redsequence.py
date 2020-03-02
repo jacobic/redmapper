@@ -16,7 +16,7 @@ from scipy import interpolate
 from .chisq_dist import compute_chisq
 from .catalog import Catalog
 from .utilities import CubicSpline, MStar
-from .utilities import schechter_pdf
+from .utilities import schechter_pdf, RedGalInitialColors
 
 class RedSequenceColorPar(object):
     """
@@ -77,6 +77,8 @@ class RedSequenceColorPar(object):
             mstar_survey = config.mstar_survey
             mstar_band = config.mstar_band
             ncol = config.nmag - 1
+            templatefile = config.calib_redgal_template
+            bands = config.bands
 
             # A compromize zbinsize
             zbinsize = 0.001
@@ -95,6 +97,11 @@ class RedSequenceColorPar(object):
                 mstar_survey = hdr['MSTARSUR']
                 mstar_band = hdr['MSTARBAN']
                 ncol = hdr['NCOL']
+                if 'TEMPLATE' in hdr:
+                    templatefile = hdr['TEMPLATE']
+                    bands = list(hdr['BANDS'].rstrip())
+                else:
+                    templatefile = None
             except:
                 raise ValueError("Missing field from parameter header.")
             has_file = True
@@ -139,6 +146,9 @@ class RedSequenceColorPar(object):
                     ref_ind = hdr['I_IND']
                 except:
                     raise ValueError("Need REF_IND or I_IND")
+
+        if templatefile is not None:
+            rg = RedGalInitialColors(templatefile)
 
         nz = np.round((zrange[1]-zrange[0])/zbinsize).astype('i4') #nr of bins
         self.z = zbinsize*np.arange(nz) + zrange[0]                #z bins
@@ -279,6 +289,38 @@ class RedSequenceColorPar(object):
                 self.corr_r = np.ones(nz)
                 self.corr2_r = np.ones(nz)
 
+            # Deal with extrapolation in the case where we have a template
+            if templatefile is not None:
+                not_extrap, = np.where(~self.extrapolated)
+
+                # Pin the pivotmag.
+
+                self.pivotmag[loz] = self.pivotmag[not_extrap[0]]
+                self.pivotmag[hiz] = self.pivotmag[not_extrap[-1]]
+
+                # Leave the max/min refmag extrapolated
+
+                # Pin the slope.
+                for j in range(ncol):
+                    self.slope[loz, j] = self.slope[not_extrap[0], j]
+                    self.slope[hiz, j] = self.slope[not_extrap[-1], j]
+
+                # Leave the covariance matrix extrapolated?
+
+                # Replace the intercept with the template values (offset)
+                for j in range(ncol):
+                    try:
+                        delta = (rg(bands[j], bands[j + 1], self.z[not_extrap[0]]) -
+                                 self.c[not_extrap[0], j])
+                        self.c[loz, j] = rg(bands[j], bands[j + 1], self.z[loz]) - delta
+
+                        delta = (rg(bands[j], bands[j + 1], self.z[not_extrap[-1]]) -
+                                 self.c[not_extrap[-1], j])
+                        self.c[hiz, j] = rg(bands[j], bands[j + 1], self.z[hiz]) - delta
+                    except ValueError:
+                        # This is fine, we won't use the template extrapolation
+                        pass
+
         # mstar
         # create LUT
         self._mstar = ms(self.z)
@@ -331,10 +373,6 @@ class RedSequenceColorPar(object):
         self.mstar_survey = mstar_survey
         self.mstar_band = mstar_band
         self.limmag = limmag
-
-        # don't make this into a catalog
-        #super(RedSequenceColorPar, self).__init__(zredstr)
-
 
     def mstar(self,z):
         """

@@ -77,7 +77,7 @@ class RunZredPixelTask(object):
                     raise IOError("Could not create %s directory" % (zredpath))
 
         # Configure the config to run only this pixel
-        self.config.d.hpix = self.pixel
+        self.config.d.hpix = [self.pixel]
         self.config.d.nside = self.nside
         self.config.d.outbase = '%s_%05d' % (self.config.outbase, self.pixel)
         self.config.border = 0.0

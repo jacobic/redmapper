@@ -76,5 +76,6 @@ class RedSequenceCalTestCase(unittest.TestCase):
             if os.path.exists(self.test_dir):
                 shutil.rmtree(self.test_dir, True)
 
+
 if __name__=='__main__':
     unittest.main()

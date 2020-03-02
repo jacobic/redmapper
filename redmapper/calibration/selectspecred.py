@@ -7,14 +7,14 @@ from past.builtins import xrange
 import os
 import numpy as np
 import fitsio
-from pkg_resources import resource_filename
-from pkg_resources import resource_exists
+#from pkg_resources import resource_filename
+#from pkg_resources import resource_exists
 
 from ..configuration import Configuration
 from ..fitters import MedZFitter, RedSequenceFitter, EcgmmFitter
 from ..galaxy import GalaxyCatalog
 from ..catalog import Catalog, Entry
-from ..utilities import make_nodes, CubicSpline, interpol
+from ..utilities import make_nodes, CubicSpline, interpol, RedGalInitialColors
 
 class SelectSpecRedGalaxies(object):
     """
@@ -50,14 +50,7 @@ class SelectSpecRedGalaxies(object):
         if self.config.calib_redgal_template is None:
             raise RuntimeError("Cannot run SelectSpecRedGalaxies without a calib_redgal_template")
 
-        module = __name__.split('.')[0]
-        if resource_exists(module, 'data/initcolors/%s' % (self.config.calib_redgal_template)):
-            self._template_file = resource_filename(module, 'data/initcolors/%s' % (self.config.calib_redgal_template))
-        elif os.path.isfile(self.config.calib_redgal_template):
-            self._template_file = os.path.abspath(self.config.calib_redgal_template)
-        else:
-            raise IOError("Could not find calib_redgal_template file %s in resource or path" % (self.config.calib_redgal_template))
-
+        self.redGalInitialColors = RedGalInitialColors(self.config.calib_redgal_template)
 
     def run(self):
         """
@@ -111,11 +104,6 @@ class SelectSpecRedGalaxies(object):
         meancol = np.zeros_like(medcol)
         meancol_scatter = np.zeros_like(meancol)
 
-        # Read in the template
-        template = Catalog.from_fits_file(self._template_file, ext=1)
-        template_hdr = fitsio.read_header(self._template_file, ext=1)
-        template_bands = list(template_hdr['BANDS'].rstrip())
-
         # Loop over modes
         nmodes = self.config.calib_colormem_colormodes.size
 
@@ -124,14 +112,8 @@ class SelectSpecRedGalaxies(object):
 
             self.config.logger.info("Working on color %d" % (j))
 
-            # Get the template index...
-            try:
-                template_index = template_bands.index(self.config.bands[j])
-            except ValueError:
-                raise ValueError("Calibration color %s-%s not in template file %s" % (self.config.bands[j], self.config.bands[j + 1], self.config.calib_redgal_template))
+            c = self.redGalInitialColors(self.config.bands[j], self.config.bands[j + 1], gals.z)
 
-            # Compute global template offset
-            c = interpol(template.color[:, template_index], template.z, gals.z)
             delta = galcolor[:, j] - c
 
             st = np.argsort(delta)
@@ -143,7 +125,7 @@ class SelectSpecRedGalaxies(object):
             ecfitter = EcgmmFitter(delta[u], galcolor_err[u, j])
             wt, mu, sigma = ecfitter.fit([0.2], [-0.5, 0.0], [0.2, 0.05], offset=2.0)
 
-            mvals = interpol(template.color[:, template_index], template.z, nodes) + mu[1]
+            mvals = self.redGalInitialColors(self.config.bands[j], self.config.bands[j + 1], nodes) + mu[1]
             scvals = np.zeros(nodes.size) + sigma[1]
 
             # Fit median and median-width

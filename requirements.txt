@@ -1,6 +1,5 @@
 astropy
 matplotlib
-sphinx
 nose
 pyyaml
 fitsio

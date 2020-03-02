@@ -20,7 +20,9 @@ scripts = ['bin/redmapper_run_zred_pixel.py',
            'bin/redmagic_calibrate.py',
            'bin/redmagic_run.py',
            'bin/redmapper_convert_mask_to_healsparse.py',
-           'bin/redmapper_convert_depthfile_to_healsparse.py']
+           'bin/redmapper_convert_depthfile_to_healsparse.py',
+           'bin/redmapper_run_many_pixels_same_node.py',
+           'bin/redmapper_build_docker.py']
 
 include_dirs = [numpy.get_include()]
 
@@ -42,7 +44,7 @@ chisq_dist_sources=['redmapper/chisq_dist/chisq_dist.c',
 chisq_dist_module = Extension('redmapper.chisq_dist._chisq_dist_pywrap',
                               extra_compile_args=['-std=gnu99',os.path.expandvars('-I${GSLI}')],
                               extra_link_args=[os.path.expandvars('-L${GSLL}')],
-                              libraries=['gslcblas','gsl'],
+                              libraries=['gsl', 'gslcblas'],
                               sources=chisq_dist_sources,
                               include_dirs=include_dirs)
 ext_modules.append(chisq_dist_module)

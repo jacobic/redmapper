@@ -13,20 +13,34 @@ import numpy as np
 import itertools
 import healpy as hp
 import os
+import glob
+import re
 from collections.abc import Iterable
 
 from .catalog import Catalog, Entry
 from .mask import get_mask
+from .utilities import make_lockfile
 
-zred_extra_dtype = [('ZRED', 'f4'),
-                    ('ZRED_E', 'f4'),
-                    ('ZRED2', 'f4'),
-                    ('ZRED2_E', 'f4'),
-                    ('ZRED_UNCORR', 'f4'),
-                    ('ZRED_UNCORR_E', 'f4'),
-                    ('LKHD', 'f4'),
-                    ('CHISQ', 'f4')]
 
+def zred_extra_dtype(nsamp):
+    """
+    Return the zred dtype to append.
+
+    Parameters
+    ----------
+    nsamp: `int`
+       Number of samples of zred to record
+    """
+
+    return [('ZRED', 'f4'),
+            ('ZRED_E', 'f4'),
+            ('ZRED2', 'f4'),
+            ('ZRED2_E', 'f4'),
+            ('ZRED_UNCORR', 'f4'),
+            ('ZRED_UNCORR_E', 'f4'),
+            ('ZRED_SAMP', 'f4', nsamp),
+            ('LKHD', 'f4'),
+            ('CHISQ', 'f4')]
 
 class Galaxy(Entry):
     """
@@ -245,7 +259,6 @@ class GalaxyCatalog(Catalog):
                 zcat[ctr: ctr + tab.ngals[index]] = fitsio.read(fname, ext=1, upper=False)
             ctr += tab.ngals[index]
 
-        #if _hpix is not None and nside > 0 and border > 0.0:
         if len(_hpix) == 1 and nside > 0 and border > 0.0:
             # Trim to be closer to the border if necessary...
 
@@ -302,15 +315,20 @@ class GalaxyCatalog(Catalog):
         galcol_err = np.sqrt(self.mag_err[:, :-1]**2. + self.mag_err[:, 1:]**2.)
         return galcol_err
 
-    def add_zred_fields(self):
+    def add_zred_fields(self, nsamp):
         """
         Add default columns for storing zreds.
 
         Note that this will do nothing if the columns are already there.
 
         Modifies GalaxyCatalog in place.
+
+        Parameters
+        ----------
+        nsamp: `int`
+           Number of samples of zred to record
         """
-        dtype_augment = [dt for dt in zred_extra_dtype if dt[0].lower() not in self.dtype.names]
+        dtype_augment = [dt for dt in zred_extra_dtype(nsamp) if dt[0].lower() not in self.dtype.names]
         if len(dtype_augment) > 0:
             self.add_fields(dtype_augment)
 
@@ -493,7 +511,8 @@ class GalaxyCatalogMaker(object):
     maker.finalize_catalog()
     """
 
-    def __init__(self, outbase, info_dict, nside=32, maskfile=None, mask_mode=0):
+    def __init__(self, outbase, info_dict, nside=32, maskfile=None, mask_mode=0,
+                 parallel=False, generate_unique_ids=False):
         """
         Instantiate a GalaxyCatalogMaker
 
@@ -522,7 +541,14 @@ class GalaxyCatalogMaker(object):
            Geometric mask file.  Default is None (mask already applied).
         mask_mode: `int`, optional
            Geometric mask file mode.  Default is 0.
+        parallel: `bool`, optional
+           This is part of a parallel job of writing files.
+        generate_unique_ids: `bool`, optional
+           Make new unique galaxy ids
         """
+
+        self.parallel = parallel
+        self.generate_unique_ids = generate_unique_ids
 
         # Record values
         self.outbase = outbase
@@ -575,7 +601,18 @@ class GalaxyCatalogMaker(object):
         self.outbase_nopath = os.path.basename(self.outbase)
 
         if not os.path.exists(self.outpath):
-            os.makedirs(self.outpath)
+            if not self.parallel:
+                os.makedirs(self.outpath)
+            else:
+                try:
+                    os.makedirs(self.outpath)
+                except FileExistsError:
+                    # This is okay in parallel mode
+                    pass
+
+        # Make sure final table isn't already there
+        if os.path.isfile(self.filename):
+            raise RuntimeError("Cannot split galaxies when final file %s already exists." % (self.filename))
 
         # create a table
         self.ngals = np.zeros(hp.nside2npix(self.nside), dtype=np.int32)
@@ -597,8 +634,11 @@ class GalaxyCatalogMaker(object):
         gals: `np.ndarray`
            Galaxy catalog structure.  See class docstring for what is in the catalog.
         """
+
         if self.is_finalized:
             raise RuntimeError("Cannot split galaxies for an already finalized catalog.")
+        if os.path.isfile(self.filename):
+            raise RuntimeError("Cannot split galaxies when final file %s already exists." % (self.filename))
 
         self.append_galaxies(gals)
         self.finalize_catalog()
@@ -614,6 +654,8 @@ class GalaxyCatalogMaker(object):
         """
         if self.is_finalized:
             raise RuntimeError("Cannot append galaxies for an already finalized catalog.")
+        if os.path.isfile(self.filename):
+            raise RuntimeError("Cannot append galaxies when final file %s already exists." % (self.filename))
 
         self._check_galaxies(gals)
 
@@ -634,16 +676,36 @@ class GalaxyCatalogMaker(object):
 
             fname = os.path.join(self.outpath, '%s_%07d.fit' % (self.outbase_nopath, pix))
 
-            if (self.ngals[pix] == 0) and (os.path.isfile(fname)):
-                raise RuntimeError("We think there are 0 galaxies in pixel %d, but the file exists." % (pix))
+            if self.parallel:
+                # Parallel writing mode
+                lockfile = fname + '.lock'
+                locktest = make_lockfile(lockfile, block=True, maxtry=300, waittime=2)
+                if not locktest:
+                    raise RuntimeError("Could not get a lock to write galaxies!")
 
-            if self.ngals[pix] == 0:
-                # Create a new file
-                fitsio.write(fname, gals[i1a])
+                if not os.path.isfile(fname):
+                    # Create a new file
+                    fitsio.write(fname, gals[i1a])
+                else:
+                    fits = fitsio.FITS(fname, mode='rw')
+                    fits[1].append(gals[i1a])
+                    fits.close()
+
+                # Clear the lockfile
+                os.remove(lockfile)
             else:
-                fits = fitsio.FITS(fname, mode='rw')
-                fits[1].append(gals[i1a])
-                fits.close()
+                # Regular serial writing
+
+                if (self.ngals[pix] == 0) and (os.path.isfile(fname)):
+                    raise RuntimeError("We think there are 0 galaxies in pixel %d, but the file exists." % (pix))
+
+                if self.ngals[pix] == 0:
+                    # Create a new file
+                    fitsio.write(fname, gals[i1a])
+                else:
+                    fits = fitsio.FITS(fname, mode='rw')
+                    fits[1].append(gals[i1a])
+                    fits.close()
 
             self.ngals[pix] += i1a.size
 
@@ -653,6 +715,39 @@ class GalaxyCatalogMaker(object):
 
         This should be the last step.
         """
+
+        if self.parallel:
+            # Only one can write the final catalog
+
+            # If the final file is there, we're already done.
+            if os.path.isfile(self.filename):
+                return
+
+            # Try to get a lock
+            lockfile = self.filename + '.lock'
+            locktest = make_lockfile(lockfile, block=False)
+            if not locktest:
+                # Somebody else has a lock and is responsible for the final
+                # output.
+                return
+
+            # We have a lock and the file isn't written, so we need to do the
+            # consolidation
+
+            self.ngals[:] = 0
+
+            # Figure out which hpixels are there
+            files = sorted(glob.glob('%s/%s_???????.fit' % (self.outpath, self.outbase_nopath)))
+            for f in files:
+                m = re.search('_(\d{7})', f)
+                if m is None:
+                    raise RuntimeError("Malformed filename for pixel file: %s" % (f))
+
+                pix = int(m.groups()[0])
+
+                # And how many galaxies are in each
+                with fitsio.FITS(f) as fits:
+                    self.ngals[pix] = fits[1].get_nrows()
 
         hpix, = np.where(self.ngals > 0)
 
@@ -723,7 +818,45 @@ class GalaxyCatalogMaker(object):
 
         tab.to_fits_file(self.filename, header=hdr, clobber=True)
 
+        # Check for galaxy uniqueness or generate unique ids
+        if self.generate_unique_ids:
+            print("Generating unique IDs...")
+            ctr = 1
+
+            for f in tab.filenames:
+                try:
+                    fname = os.path.join(self.outpath, f.decode())
+                except AttributeError:
+                    fname = os.path.join(self.outpath, f)
+
+                with fitsio.FITS(fname, mode=fitsio.READWRITE) as fits:
+                    ids = fits[1].read_column('id')
+                    ids = np.arange(ctr, ctr + ids.size, dtype=np.int64)
+                    fits[1].write_column('id', ids)
+
+                    ctr += ids.size
+        else:
+            ids = np.zeros(tab.ngals.sum(), dtype=np.int64)
+
+            ctr = 0
+            for i, f in enumerate(tab.filenames):
+                try:
+                    fname = os.path.join(self.outpath, f.decode())
+                except AttributeError:
+                    fname = os.path.join(self.outpath, f)
+
+                with fitsio.FITS(fname) as fits:
+                    ids[ctr: ctr + tab.ngals[i]] = fits[1].read_column('id')
+                    ctr += tab.ngals[i]
+
+            if len(np.unique(ids)) < len(ids):
+                raise RuntimeError("Input galaxy IDs must be unique.  Fix input catalog or use generate_unique_ids")
+
         self.is_finalized = True
+
+        if self.parallel:
+            # Remove the lockfile
+            os.remove(lockfile)
 
     def _check_galaxies(self, gals):
         """
@@ -790,6 +923,11 @@ class GalaxyCatalogMaker(object):
         bad, = np.where((gals['dec'] < -90.0) | (gals['dec'] > 90.0))
         if bad.size > 0:
             raise RuntimeError("Input dec has %d values that are out of range -90.0 <= dec <= 90.0" % (bad.size))
+
+        if not self.generate_unique_ids:
+            # Do a local check for uniqueness of ids
+            if len(np.unique(gals['id'])) < len(gals['id']):
+                raise RuntimeError("Input galaxy IDs must be unique.  Fix input catalog or use generate_unique_ids")
 
     @staticmethod
     def get_galaxy_dtype(nmag, truth=False):

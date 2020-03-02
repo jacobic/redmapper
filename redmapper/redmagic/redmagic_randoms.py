@@ -85,8 +85,8 @@ class RedmagicGenerateRandoms(object):
 
         while (n_left > 0):
             n_gen = np.clip(n_left * 3, min_gen, max_gen)
-            ra_rand, dec_rand = healsparse.makeUniformRandoms(self.vlim_mask.sparse_vlimmap,
-                                                              n_gen)
+            ra_rand, dec_rand = healsparse.make_uniform_randoms(self.vlim_mask.sparse_vlimmap,
+                                                                n_gen)
 
             # What are the associated z_max and fracgood?
             zmax, fracgood = self.vlim_mask.calc_zmax(ra_rand, dec_rand, get_fracgood=True)

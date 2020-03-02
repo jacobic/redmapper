@@ -37,7 +37,7 @@ class HealsparseConversionsTestCase(unittest.TestCase):
 
         comp = np.array([1.0, 1.0, 1.0, 1.0, hp.UNSEEN], dtype=np.float32)
 
-        testing.assert_almost_equal(sparsemask.getValueRaDec(RAs, Decs), comp)
+        testing.assert_almost_equal(sparsemask.get_values_pos(RAs, Decs, lonlat=True), comp)
 
     def test_depth_conversion(self):
         """
@@ -59,7 +59,7 @@ class HealsparseConversionsTestCase(unittest.TestCase):
         comp_exptime = np.array([70.3742, 63.5621, 63.5621, 63.5621, -1.63750e+30], dtype='f4')
         comp_m50 = np.array([20.8964, 20.8517, 20.8568, 20.8568, -1.63750e+30], dtype='f4')
 
-        values = sparsemask.getValueRaDec(RAs, Decs)
+        values = sparsemask.get_values_pos(RAs, Decs, lonlat=True)
 
         testing.assert_almost_equal(values['limmag'], comp_limmag, 4)
         testing.assert_almost_equal(values['exptime'], comp_exptime, 4)

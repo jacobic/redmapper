@@ -39,7 +39,7 @@ def load_batchconfig(filename):
        Dict of parameters from configuration file.
     """
     with open(filename) as f:
-        yaml_data = yaml.load(f)
+        yaml_data = yaml.load(f, Loader=yaml.SafeLoader)
 
     for key in yaml_data.keys():
         if 'batch' not in yaml_data[key]:
@@ -48,6 +48,18 @@ def load_batchconfig(filename):
             yaml_data[key]['setup'] = ''
         if 'requirements' not in yaml_data[key]:
             yaml_data[key]['requirements'] = ''
+        if 'taskfarmer' not in yaml_data[key]:
+            yaml_data[key]['taskfarmer'] = False
+        if 'image' not in yaml_data[key]:
+            yaml_data[key]['image'] = ''
+        if 'constraint' not in yaml_data[key]:
+            yaml_data[key]['constraint'] = ''
+        if 'qos' not in yaml_data[key]:
+            yaml_data[key]['qos'] = ''
+        if 'cpus_per_node' not in yaml_data[key]:
+            yaml_data[key]['cpus_per_node'] = -1
+        if 'mem_per_node' not in yaml_data[key]:
+            yaml_data[key]['mem_per_node'] = 0.0
 
     return yaml_data
 
@@ -76,11 +88,13 @@ parser.add_argument('-w', '--walltime', action='store', type=int, required=False
                     help='Wall time (override default)')
 parser.add_argument('-n', '--nside', action='store', type=int, required=False,
                     help='Parallelization nside (optional, can use default)')
+parser.add_argument('-N', '--nodes', action='store', type=int, required=False,
+                    default=2, help='Number of nodes to run (for nersc)')
 
 args = parser.parse_args()
 
 if not mode_required and args.batchmode is None:
-    batchmode = batchconfig.keys()[0]
+    batchmode = list(batchconfig.keys())[0]
 else:
     batchmode = args.batchmode
 
@@ -140,9 +154,22 @@ if not os.path.isdir(jobpath):
 test = glob.glob(os.path.join(jobpath, '%s_?.job' % (jobname)))
 index = len(test)
 
+if args.runmode == 0:
+    # Run in the directory where the config file is, by default
+    run_command = 'redmapper_run_redmapper_pixel.py -c %s -p %%s -n %d -d %s' % (
+        (os.path.abspath(args.configfile),
+         nside,
+         os.path.dirname(os.path.abspath(args.configfile))))
+elif args.runmode == 1:
+    run_command = 'redmapper_run_zred_pixel.py -c %s -p %%s -n %d -d %s' % (
+        (os.path.abspath(args.configfile),
+         nside,
+         os.path.dirname(os.path.abspath(args.configfile))))
+
 jobfile = os.path.join(jobpath, '%s_%d.job' % (jobname, index + 1))
 
 with open(jobfile, 'w') as jf:
+    write_jobarray = True
     if (batchconfig[batchmode]['batch'] == 'lsf'):
         # LSF mode
         jf.write("#BSUB -R '%s'\n" % (batchconfig[batchmode]['requirements']))
@@ -152,7 +179,7 @@ with open(jobfile, 'w') as jf:
         jf.write("#BSUB -n 1\n")
         jf.write("#BSUB -W %d\n\n" % (walltime))
 
-        index_string = '$LSB_JOBINDEX-1'
+        index_string = '${pixarr[LSB_JOBINDEX-1]}'
 
     elif (batchconfig[batchmode]['batch'] == 'pbs'):
         # PBS mode
@@ -179,28 +206,13 @@ with open(jobfile, 'w') as jf:
         # Nothing else supported
         raise RuntimeError("Only LSF, PBS and SLURM supported at this time.")
 
-    jf.write("pixarr=(")
-    for hpix in hpix_run:
-        jf.write("%d " % (hpix))
-    jf.write(")\n\n")
+    if write_jobarray:
+        jf.write("pixarr=(")
+        for hpix in hpix_run:
+            jf.write("%d " % (hpix))
+        jf.write(")\n\n")
 
-    jf.write("%s\n\n" % (batchconfig[batchmode]['setup']))
+        jf.write("%s\n\n" % (batchconfig[batchmode]['setup']))
 
-    if args.runmode == 0:
-        # Run in the directory where the config file is...
-        # I think this is okay, but can be revisited
-        cmd = 'redmapper_run_redmapper_pixel.py -c %s -p ${pixarr[%s]} -n %d -d %s' % (
-            (os.path.abspath(args.configfile),
-             index_string,
-             nside,
-             os.path.dirname(os.path.abspath(args.configfile))))
-
-    elif args.runmode == 1:
-        cmd = 'redmapper_run_zred_pixel.py -c %s -p ${pixarr[%s]} -n %d -d %s' % (
-            (os.path.abspath(args.configfile),
-             index_string,
-             nside,
-             os.path.dirname(os.path.abspath(args.configfile))))
-
-    jf.write('%s\n' % (cmd))
-
+        cmd = run_command % (index_string)
+        jf.write("%s\n" % (cmd))

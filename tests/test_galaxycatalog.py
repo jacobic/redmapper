@@ -130,37 +130,92 @@ class GalaxyCatalogTestCase(unittest.TestCase):
                  ('ra', 'f8')]
         maker = GalaxyCatalogMaker(os.path.join(self.test_dir, 'test'), info_dict)
         testgals = np.zeros(10, dtype=dtype)
+        testgals['id'] = np.arange(10)
         self.assertRaises(RuntimeError, maker.append_galaxies, testgals)
 
         # Test 3: make a catalog that has the wrong number of magnitudes
         dtype = GalaxyCatalogMaker.get_galaxy_dtype(3)
         testgals = np.zeros(10, dtype=dtype)
+        testgals['id'] = np.arange(10)
         self.assertRaises(RuntimeError, maker.append_galaxies, testgals)
 
         # Test 4: make a catalog that has some NaNs
         dtype = GalaxyCatalogMaker.get_galaxy_dtype(info_dict['NMAG'])
         testgals = np.ones(10, dtype=dtype)
+        testgals['id'] = np.arange(10)
         testgals['mag'][0, 1] = np.nan
         self.assertRaises(RuntimeError, maker.append_galaxies, testgals)
 
         # Test 5: make a catalog that has ra/dec out of range
         testgals = np.ones(10, dtype=dtype)
+        testgals['id'] = np.arange(10)
         testgals['ra'][1] = -1.0
         self.assertRaises(RuntimeError, maker.append_galaxies, testgals)
 
         testgals = np.ones(10, dtype=dtype)
+        testgals['id'] = np.arange(10)
         testgals['dec'][1] = -100.0
         self.assertRaises(RuntimeError, maker.append_galaxies, testgals)
 
         # Test 6: make a catalog that has mag > 90.0
         testgals = np.ones(10, dtype=dtype)
+        testgals['id'] = np.arange(10)
         testgals['mag'][0, 1] = 100.0
         self.assertRaises(RuntimeError, maker.append_galaxies, testgals)
 
         # Test 7: make a catalog that has mag_err == 0.0
         testgals = np.ones(10, dtype=dtype)
+        testgals['id'] = np.arange(10)
         testgals['mag_err'][0, 1] = 0.0
         self.assertRaises(RuntimeError, maker.append_galaxies, testgals)
+
+        # Test 8: make a catalog that has duplicate ids
+        testgals = np.ones(10, dtype=dtype)
+        self.assertRaises(RuntimeError, maker.append_galaxies, testgals)
+
+    def test_galaxycatalog_create_parallel(self):
+        """
+        Run `redmapper.GalaxyCatalogMaker` parallel tests.
+        """
+
+        # Make a test directory
+        self.test_dir = tempfile.mkdtemp(dir='./', prefix='TestRedmapper-')
+
+        info_dict = {'LIM_REF': 21.0,
+                     'REF_IND': 3,
+                     'AREA': 25.0,
+                     'NMAG': 5,
+                     'MODE': 'SDSS',
+                     'ZP': 22.5,
+                     'U_IND': 0,
+                     'G_IND': 1,
+                     'R_IND': 2,
+                     'I_IND': 3,
+                     'Z_IND': 3}
+
+        configfile = os.path.join('data_for_tests', 'testconfig.yaml')
+        config = Configuration(configfile)
+        gals = GalaxyCatalog.from_galfile(config.galfile)
+        tab = Entry.from_fits_file(config.galfile)
+
+        # Not truly parallel, but possible to use two makers at once here.
+        maker1 = GalaxyCatalogMaker(os.path.join(self.test_dir, 'test_working'), info_dict, nside=tab.nside, parallel=True)
+        maker2 = GalaxyCatalogMaker(os.path.join(self.test_dir, 'test_working'), info_dict, nside=tab.nside, parallel=True)
+        maker1.append_galaxies(gals._ndarray[0: gals.size//2])
+        maker2.append_galaxies(gals._ndarray[gals.size//2: ])
+        maker1.finalize_catalog()
+        maker2.finalize_catalog()
+
+        tab2 = Entry.from_fits_file(os.path.join(self.test_dir, 'test_working_master_table.fit'))
+        self.assertEqual(tab.nside, tab2.nside)
+        self.assertEqual(tab.filenames.size, tab2.filenames.size)
+
+        for filename in tab2.filenames:
+            try:
+                fname = os.path.join(self.test_dir, filename.decode())
+            except AttributeError:
+                fname = os.path.join(self.test_dir, filename)
+            self.assertTrue(os.path.isfile(fname))
 
     def setUp(self):
         self.test_dir = None

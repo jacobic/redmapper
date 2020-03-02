@@ -13,6 +13,7 @@ import healpy as hp
 import time
 import copy
 import os
+import esutil
 
 import multiprocessing
 from multiprocessing import Pool
@@ -454,11 +455,13 @@ class BackgroundGenerator(object):
         if self.config.galfile_pixelized:
             master = Entry.from_fits_file(self.config.galfile)
 
-            if (self.config.d.hpix > 0):
+            if len(self.config.d.hpix) > 0:
                 # We need to take a sub-region
                 theta, phi = hp.pix2ang(master.nside, master.hpix)
                 ipring_big = hp.ang2pix(self.config.d.nside, theta, phi)
-                subreg_indices, = np.where(ipring_big == self.config.d.hpix)
+
+                _, subreg_indices = esutil.numpy_util.match(self.config.d.hpix, ipring_big)
+                subreg_indices = np.unique(subreg_indices)
             else:
                 subreg_indices = np.arange(master.hpix.size)
 
@@ -639,11 +642,16 @@ class ZredBackgroundGenerator(object):
 
         master = Entry.from_fits_file(self.config.galfile)
 
-        if self.config.d.hpix > 0:
+        if len(self.config.d.hpix) > 0:
             # We need to take a sub-region
             theta, phi = hp.pix2ang(master.nside, master.hpix)
-            ipring_bin = hp.ang2pix(self.config.d.nside, theta, phi)
-            subreg_indices, = np.where(ipring_bin == self.config.d.hpix)
+            ipring_big = hp.ang2pix(self.config.d.nside, theta, phi)
+
+            _, subreg_indices = esutil.numpy_util.match(self.config.d.hpix, ipring_big)
+            subreg_indices = np.unique(subreg_indices)
+
+            #ipring_bin = hp.ang2pix(self.config.d.nside, theta, phi)
+            #subreg_indices, = np.where(ipring_bin == self.config.d.hpix[0])
         else:
             subreg_indices = np.arange(master.hpix.size)
 

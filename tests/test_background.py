@@ -101,7 +101,7 @@ class BackgroundTestCase(unittest.TestCase):
         testing.assert_equal(bkg[0]['sigma_lng'].shape, (48, 40, 5))
         testing.assert_almost_equal(bkg[0]['sigma_g'][30, 20, 2], 2.8444533)
         testing.assert_almost_equal(bkg[0]['sigma_g'][30, 10, 3], 7.4324579)
-        testing.assert_almost_equal(bkg[0]['sigma_lng'][30, 10, 3], 3.7618985)
+        testing.assert_almost_equal(bkg[0]['sigma_lng'][30, 10, 3], 3.7618985, 4)
         testing.assert_almost_equal(bkg[0]['sigma_lng'][45, 10, 3], 0.0)
 
         #if os.path.exists(test_dir):

@@ -13,8 +13,10 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--configfile', action='store', type=str, required=True,
                         help='YAML config file')
     parser.add_argument('-C', '--clobber', action='store_true', default=False, help='Clobber existing run')
+    parser.add_argument('-n', '--nrandoms', action='store', type=int, required=False,
+                        help='Number of randoms to make')
 
     args = parser.parse_args()
 
     run_redmagic = redmapper.redmagic.RunRedmagicTask(args.configfile)
-    run_redmagic.run(clobber=args.clobber)
+    run_redmagic.run(clobber=args.clobber, n_randoms=args.nrandoms)

@@ -76,14 +76,7 @@ class ZredRunCatalog(object):
         zredstr = RedSequenceColorPar(self.config.parfile)
         self.zredc = ZredColor(zredstr)
 
-        zreds = Catalog(np.zeros(ngal, dtype=[('ZRED', 'f4'),
-                                              ('ZRED_E', 'f4'),
-                                              ('ZRED2', 'f4'),
-                                              ('ZRED2_E', 'f4'),
-                                              ('ZRED_UNCORR', 'f4'),
-                                              ('ZRED_UNCORR_E', 'f4'),
-                                              ('LKHD', 'f4'),
-                                              ('CHISQ', 'f4')]))
+        zreds = Catalog(np.zeros(ngal, dtype=zred_extra_dtype(self.config.zred_nsamp)))
 
         if nperproc is None:
             nperproc = int(float(ngal) / (self.config.calib_nproc - 0.1))
@@ -97,13 +90,14 @@ class ZredRunCatalog(object):
         pool.close()
         pool.join()
 
-        for ind_range, zred, zred_e, zred2, zred2_e, zred_uncorr, zred_uncorr_e, lkhd, chisq in retvals:
+        for ind_range, zred, zred_e, zred2, zred2_e, zred_uncorr, zred_uncorr_e, zred_samp, lkhd, chisq in retvals:
             zreds.zred[ind_range[0]: ind_range[1]] = zred
             zreds.zred_e[ind_range[0]: ind_range[1]] = zred_e
             zreds.zred2[ind_range[0]: ind_range[1]] = zred2
             zreds.zred2_e[ind_range[0]: ind_range[1]] = zred2_e
             zreds.zred_uncorr[ind_range[0]: ind_range[1]] = zred_uncorr
             zreds.zred_uncorr_e[ind_range[0]: ind_range[1]] = zred_uncorr_e
+            zreds.zred_samp[ind_range[0]: ind_range[1], :] = zred_samp
             zreds.lkhd[ind_range[0]: ind_range[1]] = lkhd
             zreds.chisq[ind_range[0]: ind_range[1]] = chisq
 
@@ -135,6 +129,8 @@ class ZredRunCatalog(object):
         zred_uncorr_e: `np.array`
            Float array of uncorrected zred errors for the galaxies
            in ind_range
+        zred_samp: `np.array`
+           Float array of sampled zred values for the galaxes in ind_range
         lkhd: `np.array`
            Float array of likelihoods for the galaxies in ind_range
         chisq: `np.array`
@@ -145,7 +141,7 @@ class ZredRunCatalog(object):
         in_cat = fitsio.read(self.galaxyfile, ext=1, upper=True,
                              rows=np.arange(ind_range[0], ind_range[1]))
         galaxies = GalaxyCatalog(in_cat)
-        galaxies.add_zred_fields()
+        galaxies.add_zred_fields(self.config.zred_nsamp)
 
         self.zredc.compute_zreds(galaxies)
 
@@ -153,6 +149,7 @@ class ZredRunCatalog(object):
                 galaxies.zred, galaxies.zred_e,
                 galaxies.zred2, galaxies.zred2_e,
                 galaxies.zred_uncorr, galaxies.zred_uncorr_e,
+                galaxies.zred_samp,
                 galaxies.lkhd, galaxies.chisq)
 
 
@@ -235,7 +232,10 @@ class ZredRunPixels(object):
             self.total_galaxies = np.sum(self.galtable.ngals[indices])
             if (self.verbose):
                 self.config.logger.info("Computing zred for %d galaxies in %d pixels." % (self.total_galaxies, len(indices)))
-            retvals = map(self._worker, indices)
+            pool = Pool(processes=1)
+            retvals = pool.map(self._worker, indices, chunksize=1)
+            pool.close()
+            pool.join()
 
         self.config.logger.info("Done computing zreds in %.2f seconds" % (time.time() - starttime))
 
@@ -260,13 +260,12 @@ class ZredRunPixels(object):
         outfile: `str`
            zredfile that was saved
         """
-
         # Read in just one single pixel
         galaxies = GalaxyCatalog.from_galfile(self.config.galfile,
                                               nside=self.galtable.nside,
                                               hpix=[self.galtable.hpix[index]],
                                               border=0.0)
-        galaxies.add_zred_fields()
+        galaxies.add_zred_fields(self.config.zred_nsamp)
 
         if self.single_process:
             ctr = self.ctr
@@ -282,9 +281,9 @@ class ZredRunPixels(object):
             self.ctr = ctr
 
         # And write out the pixel file ... but just the zreds
-        zreds = np.zeros(galaxies.size, dtype=zred_extra_dtype)
-        for name, t in zred_extra_dtype:
-            zreds[name][:] = galaxies._ndarray[name.lower()][:]
+        zreds = np.zeros(galaxies.size, dtype=zred_extra_dtype(self.config.zred_nsamp))
+        for dt in zred_extra_dtype(self.config.zred_nsamp):
+            zreds[dt[0]][:] = galaxies._ndarray[dt[0].lower()][:]
 
         outfile_nopath = '%s_zreds_%07d.fit' % (self.outbase, self.galtable.hpix[index])
         outfile = os.path.join(self.zredpath, outfile_nopath)

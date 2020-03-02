@@ -362,7 +362,7 @@ class HPMask(Mask):
 
         self.sparse_fracgood = healsparse.HealSparseMap.read(self.maskfile, pixels=covpixels)
 
-        self.nside = self.sparse_fracgood.nsideSparse
+        self.nside = self.sparse_fracgood.nside_sparse
 
         super(HPMask, self).__init__(config, **kwargs)
 
@@ -389,7 +389,10 @@ class HPMask(Mask):
         if (ras.size != decs.size):
             raise ValueError("ra, dec must be same length")
 
-        fracgood = self.sparse_fracgood.getValueRaDec(ras, decs)
+        gd, = np.where(np.abs(decs) < 90.0)
+
+        fracgood = np.zeros(ras.size)
+        fracgood[gd] = self.sparse_fracgood.get_values_pos(ras[gd], decs[gd], lonlat=True)
 
         radmask = np.zeros(ras.size, dtype=np.bool)
         radmask[np.where(fracgood > np.random.rand(ras.size))] = True
@@ -437,8 +440,8 @@ def convert_maskfile_to_healsparse(maskfile, healsparsefile, nsideCoverage, clob
 
     nside = old_hdr['nside']
 
-    sparseMap = healsparse.HealSparseMap.makeEmpty(nsideCoverage, nside, old_mask['fracgood'].dtype)
-    sparseMap.updateValues(old_mask['hpix'], old_mask['fracgood'], nest=old_hdr['nest'])
+    sparseMap = healsparse.HealSparseMap.make_empty(nsideCoverage, nside, old_mask['fracgood'].dtype)
+    sparseMap.update_values_pix(old_mask['hpix'], old_mask['fracgood'], nest=old_hdr['nest'])
 
     sparseMap.write(healsparsefile, clobber=clobber)
 

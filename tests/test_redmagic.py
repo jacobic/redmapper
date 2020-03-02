@@ -24,6 +24,9 @@ from redmapper import VolumeLimitMask
 
 class RedmagicCalTestCase(unittest.TestCase):
     def test_redmagic_fitter(self):
+        """
+        Test the redmagic fitting functions individually
+        """
         np.random.seed(12345)
 
         file_path = 'data_for_tests/redmagic_test'
@@ -43,19 +46,30 @@ class RedmagicCalTestCase(unittest.TestCase):
         # Set up the fitter...
         #randomn = np.random.normal(size=calstr2['z'][0, :].size)
         # Old IDL code did not sample for the selection, I think this was wrong
-        randomn = np.zeros(calstr2['z'][0, :].size)
+        # randomn = np.zeros(calstr2['z'][0, :].size)
+        zsamp = calstr2['z'][0, :]
+
+        ab_use = np.random.choice(np.arange(calstr2['z'][0, :].size), size=3000, replace=False)
+
+        # Force this to be some smooth function of redshift
+        zcal_raw = calstr2['z'][0, :] + 0.2 * (calstr2['z'][0, :] - 0.3)
+        zcal_e = calstr2['z_err'][0, :]
+
+        # And add some excess noise...
+        scale = 1.0
+        zcal = zcal_raw + np.random.normal(loc=0.0, scale=zcal_e*scale, size=zcal_raw.size)
 
         rmfitter = RedmagicParameterFitter(calstr['nodes'][0, :], calstr['corrnodes'][0, :],
                                            calstr2['z'][0, :], calstr2['z_err'][0, :],
                                            calstr2['chisq'][0, :], calstr2['mstar'][0, :],
-                                           calstr2['zcal'][0, :], calstr2['zcal_e'][0, :],
-                                           calstr2['refmag'][0, :], randomn,
+                                           zcal, zcal_e,
+                                           calstr2['refmag'][0, :], zsamp,
                                            calstr2['zmax'][0, :],
                                            calstr['etamin'][0], calstr['n0'][0],
                                            calstr2['volume'][0, :], calstr2['zrange'][0, :],
                                            calstr2['zbinsize'][0],
                                            zredstr, maxchi=20.0,
-                                           ab_use=calstr2['afterburner_use'][0, :])
+                                           ab_use=ab_use)
 
         # These match the IDL values
         testing.assert_almost_equal(rmfitter(calstr['cmax'][0, :]), 1.9331937798956758)
@@ -79,12 +93,13 @@ class RedmagicCalTestCase(unittest.TestCase):
 
         cvals = rmfitter.fit(cvals, biaspars=biasvals, eratiopars=eratiovals, afterburner=True)
 
-        testing.assert_almost_equal(cvals, np.array([3.47536146, 1.73731071, 0.92347906]))
-        testing.assert_almost_equal(biasvals, np.array([0.01754498, -0.02426337, 0.02046245]))
-        testing.assert_almost_equal(eratiovals, np.array([1.5, 1.01640766, 0.65280974]))
+        testing.assert_almost_equal(cvals, np.array([2.39569338, 3.07408774, 0.8872264]), 4)
+        testing.assert_almost_equal(biasvals, np.array([0.04477243, 0.00182884, -0.03398897]), 4)
+        testing.assert_almost_equal(eratiovals, np.array([0.64541869, 0.94068391, 0.89967353]), 2)
 
     def test_redmagic_calibrate(self):
         """
+        Test the redmagic calibration code
         """
 
         np.random.seed(12345)
@@ -98,7 +113,9 @@ class RedmagicCalTestCase(unittest.TestCase):
 
         testgals = GalaxyCatalog.from_fits_file(os.path.join('data_for_tests', 'redmagic_test', 'redmagic_test_input_gals.fit'))
 
-        testgals.add_fields([('mag', 'f4', 5), ('mag_err', 'f4', 5)])
+        testgals.add_fields([('mag', 'f4', 5), ('mag_err', 'f4', 5),
+                             ('zred_samp', 'f4', config.zred_nsamp)])
+        testgals.zred_samp[:, 0] = testgals.zred_uncorr
 
         redmagic_cal = RedmagicCalibrator(config)
         # We have to have do_run=False here because we don't have a real
@@ -114,9 +131,9 @@ class RedmagicCalTestCase(unittest.TestCase):
         # Check that they are what we think they should be
         # (these checks are arbitrary, just to make sure nothing has changed)
 
-        testing.assert_almost_equal(cal['cmax'][0, :], np.array([1.31757901, 3.62985245, 0.10363746]))
-        testing.assert_almost_equal(cal['bias'][0, :], np.array([0.02494364, -0.03852236, 0.02313449]))
-        testing.assert_almost_equal(cal['eratio'][0, :], np.array([1.49999837, 1.47993215, 0.50000744]))
+        testing.assert_almost_equal(cal['cmax'][0, :], np.array([3.25383848, 2.62276221, 0.17340609]), 5)
+        testing.assert_almost_equal(cal['bias'][0, :], np.array([-0.00961071, -0.0281055, 0.04684099]), 4)
+        testing.assert_almost_equal(cal['eratio'][0, :], np.array([1.5, 0.78679151, 0.5]), 3)
 
         pngs = glob.glob(os.path.join(self.test_dir, '*.png'))
         self.assertEqual(len(pngs), 3)
@@ -130,13 +147,15 @@ class RedmagicCalTestCase(unittest.TestCase):
 
         config = Configuration(redmagic_cal.runfile)
 
+        # This little dance removes the vmaskfile and creates a new one with
+        # the same name in the same location
         cal, hdr = fitsio.read(config.redmagicfile, ext=1, header=True)
         config.maskfile = maskfile
         try:
-            fname = cal['vmaskfile'][0].decode().rstrip()
+            vmaskfile = cal['vmaskfile'][0].decode().rstrip()
         except AttributeError:
-            fname = cal['vmaskfile'][0].rstrip()
-        os.remove(fname)
+            vmaskfile = cal['vmaskfile'][0].rstrip()
+        os.remove(vmaskfile)
         mask = VolumeLimitMask(config, cal['etamin'], use_geometry=True)
 
         # Now test the running, using the output file which has valid galaxies/zreds
@@ -165,6 +184,22 @@ class RedmagicCalTestCase(unittest.TestCase):
         # And confirm that all the randoms are in the footprint
         zmax = mask.calc_zmax(rand_cat.ra, rand_cat.dec)
         self.assertTrue(np.all(rand_cat.z < zmax))
+
+        # Now run in a different directory
+        relocpath = os.path.join(self.test_dir, 'redmagic_relocation')
+        os.makedirs(relocpath)
+        reloc_file = os.path.join(relocpath,
+                                  os.path.basename(config.redmagicfile))
+        os.rename(config.redmagicfile, reloc_file)
+        os.rename(vmaskfile, os.path.join(relocpath,
+                                          os.path.basename(vmaskfile)))
+
+        rerun_config = Configuration(redmagic_cal.runfile)
+        rerun_config.redmagicfile = reloc_file
+        rerun_configfile = os.path.join(self.test_dir, 'testconfig_redmagic_rerun.yml')
+        rerun_config.output_yaml(rerun_configfile)
+        rerun_redmagic = RunRedmagicTask(rerun_configfile)
+        rerun_redmagic.run(clobber=True)
 
     def setUp(self):
         self.test_dir = None

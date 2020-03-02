@@ -529,13 +529,19 @@ class ClusterRunner(object):
 
         This may be overridden in derived classes.
         """
-        # default post-processing...
 
+        # default post-processing...
         use, = np.where(self.cat.Lambda >= self.min_lambda)
-        self.cat = self.cat[use]
+
+        # Make a new catalog that doesn't have the extra memory usage
+        # from catalogs and neighbors
+        self.cat = ClusterCatalog(self.cat._ndarray[use])
 
         # And crop down members?
-        # FIXME
+        if self.members is not None:
+            a, b = esutil.numpy_util.match(self.cat.mem_match_id,
+                                           self.members.mem_match_id)
+            self.members = Catalog(self.members._ndarray[b])
 
     def _cleanup(self):
         """
@@ -543,14 +549,15 @@ class ClusterRunner(object):
         """
 
         # Release references to allow garbage collection to run
-        self.gals = None
-        self.bkg = None
-        self.cbkg = None
-        self.zredbkg = None
-        self.zredstr = None
-        self.depthstr = None
-        self.zlambda_corr = None
-        self.mask = None
+        del self.gals
+        del self.bkg
+        del self.cbkg
+        del self.zredbkg
+        del self.zredstr
+        del self.depthstr
+        del self.zlambda_corr
+        del self.mask
+        del self.cosmo
 
         gc.collect()
 
@@ -597,8 +604,6 @@ class ClusterRunner(object):
                 self.config.logger.info("Warning: no members generated for %s" % (self._filename))
                 return
             self.members.to_fits_file(fname_base + '_members.fit', clobber=clobber)
-
-        return
 
     @property
     def filename(self):

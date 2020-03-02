@@ -125,7 +125,7 @@ class MaskTestCase(unittest.TestCase):
         testing.assert_almost_equal(maskgals['cwt'][0: 3], [0.02877194, 0.1822518, 0.17872778])
         testing.assert_almost_equal(maskgals['nfw'][0: 3], [0.15366785, 0.32543495, 0.1454625])
         testing.assert_almost_equal(maskgals['dzred'][0: 3], [-0.03090504, 0.00847131, -0.01800639])
-        testing.assert_almost_equal(maskgals['zwt'][0: 3], [6.0447073, 18.23568916, 13.30043507])
+        testing.assert_almost_equal(maskgals['zwt'][0: 3], [6.0447073, 18.23568916, 13.30043507], 4)
         testing.assert_almost_equal(maskgals['lumwt'][0: 3], [0.39371657, 0.62304342, 0.01774093])
         testing.assert_almost_equal(maskgals['theta_r'][0: 3, 3], [0.73237121, 1., 0.3299689])
         testing.assert_almost_equal(maskgals['radbins'][0, 0: 3], [0.40000001, 0.5, 0.60000002])

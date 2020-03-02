@@ -264,7 +264,7 @@ class RedmapperCalibrator(object):
 
         # and reset the running values
         self.config.nside = 0
-        self.config.hpix = 0
+        self.config.hpix = []
         self.config.border = 0.0
 
         # And finally, if we have a depth map we don't need the area...

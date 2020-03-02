@@ -17,7 +17,7 @@ from ..color_background import ColorBackground
 from ..galaxy import GalaxyCatalog
 from ..catalog import Catalog, Entry
 from ..zred_color import ZredColor
-from ..utilities import make_nodes, CubicSpline, interpol
+from ..utilities import make_nodes, CubicSpline, interpol, RedGalInitialColors
 
 class RedSequenceCalibrator(object):
     """
@@ -785,19 +785,28 @@ class RedSequenceCalibrator(object):
            Clobber any existing file?  Default is False.
         """
 
+        if self.config.calib_redgal_template is not None:
+            rg = RedGalInitialColors(self.config.calib_redgal_template)
+            zmax = rg.zmax
+        else:
+            zmax = None
+
         hdr = fitsio.FITSHDR()
         hdr['NCOL'] = self.config.nmag - 1
         hdr['MSTARSUR'] = self.config.mstar_survey
         hdr['MSTARBAN'] = self.config.mstar_band
         hdr['LIMMAG'] = self.config.limmag_catalog
-        # Saved with arbitrary cushion that seems to work well
-        hdr['ZRANGE0'] = np.clip(self.config.zrange[0] - 0.07, 0.01, None)
-        hdr['ZRANGE1'] = self.config.zrange[1] + 0.07
+        # Saved with larger cushion that seems to work well
+        hdr['ZRANGE0'] = np.clip(self.config.zrange[0] - 0.1, 0.01, None)
+        hdr['ZRANGE1'] = np.clip(self.config.zrange[1] + 0.25, None, zmax)
         hdr['ALPHA'] = self.config.calib_lumfunc_alpha
         hdr['ZBINFINE'] = self.config.zredc_binsize_fine
         hdr['ZBINCOAR'] = self.config.zredc_binsize_coarse
         hdr['LOWZMODE'] = 0
         hdr['REF_IND'] = self.config.ref_ind
+        hdr['BANDS'] = ''.join(self.config.bands)
+        if self.config.calib_redgal_template is not None:
+            hdr['TEMPLATE'] = self.config.calib_redgal_template
         # Only save the b values if they're > 0 (that means we have
         # luptitudes).
         if self.config.b[0] > 0.0:
@@ -823,7 +832,7 @@ class RedSequenceCalibrator(object):
 
         zredc = ZredColor(zredstr, do_correction=do_correction)
 
-        gals.add_zred_fields()
+        gals.add_zred_fields(self.config.zred_nsamp)
 
         starttime = time.time()
         zredc.compute_zreds(gals)
