@@ -27,11 +27,13 @@ from .catalog import Catalog
 from .cluster import Cluster
 from .cluster import ClusterCatalog
 from .depthmap import DepthMap
+from .plotting import ScanPlot
 from .zlambda import Zlambda
 from .zlambda import ZlambdaCorrectionPar
 from .redsequence import RedSequenceColorPar
 from .depth_fitting import DepthLim
 from .utilities import getMemoryString
+
 
 ###################################################
 # Order of operations:
@@ -92,7 +94,8 @@ class ClusterRunner(object):
         self.runmode = None
         self.filetype = None
 
-        raise RuntimeError("Method _additional_initialization requires override")
+        raise RuntimeError(
+            "Method _additional_initialization requires override")
 
     def _setup(self):
         """
@@ -121,8 +124,8 @@ class ClusterRunner(object):
             self.maxrad2 = 1.2 * self.rmask_0
         else:
             # maximum possible richness is 300
-            self.maxrad = self.r0 * (300./100.)**self.beta
-            self.maxrad2 = self.rmask_0 * (300./100.)**self.rmask_beta
+            self.maxrad = self.r0 * (300. / 100.) ** self.beta
+            self.maxrad2 = self.rmask_0 * (300. / 100.) ** self.rmask_beta
 
         if self.maxrad2 > self.maxrad:
             self.maxrad = self.maxrad2
@@ -133,7 +136,8 @@ class ClusterRunner(object):
 
         # read in background
         if self.use_colorbkg:
-            self.cbkg = ColorBackground(self.config.bkgfile_color, usehdrarea=True)
+            self.cbkg = ColorBackground(self.config.bkgfile_color,
+                                        usehdrarea=True)
             self.bkg = None
         else:
             self.bkg = Background(self.config.bkgfile)
@@ -152,8 +156,9 @@ class ClusterRunner(object):
 
         # And correction parameters
         try:
-            self.zlambda_corr = ZlambdaCorrectionPar(parfile=self.config.zlambdafile,
-                                                     zlambda_pivot=self.config.zlambda_pivot)
+            self.zlambda_corr = ZlambdaCorrectionPar(
+                parfile=self.config.zlambdafile,
+                zlambda_pivot=self.config.zlambda_pivot)
         except:
             self.zlambda_corr = None
 
@@ -169,7 +174,8 @@ class ClusterRunner(object):
             self.depthstr = None
 
         if self.depthstr is None and not self.read_gals:
-            raise RuntimeError("Must have a valid depthstr if read_gals is False")
+            raise RuntimeError(
+                "Must have a valid depthstr if read_gals is False")
 
         self.cosmo = self.config.cosmo
 
@@ -187,6 +193,12 @@ class ClusterRunner(object):
 
         self.gals = None
 
+        #@jacobic, must set logstr accessing the attribute!
+        if len(self.config.d.hpix) == 0:
+            self.hpix_logstr = "All"
+        else:
+            self.hpix_logstr = ", ".join(str(x) for x in self.config.d.hpix)
+
         if self.read_gals:
             self.gals = GalaxyCatalog.from_galfile(self.config.galfile,
                                                    nside=self.config.d.nside,
@@ -202,12 +214,14 @@ class ClusterRunner(object):
             # Cut galaxies if desired
             if self.cutgals_bkgrange:
                 refmag_low = self.bkg.refmagbins[0]
-                refmag_high = self.bkg.refmagbins[-1] + (self.bkg.refmagbins[1] - self.bkg.refmagbins[0])
+                refmag_high = self.bkg.refmagbins[-1] + (
+                            self.bkg.refmagbins[1] - self.bkg.refmagbins[0])
             else:
                 refmag_low = -1000.0
                 refmag_high = 1000.0
 
-            guse = ((self.gals.refmag > refmag_low) & (self.gals.refmag < refmag_high))
+            guse = ((self.gals.refmag > refmag_low) & (
+                        self.gals.refmag < refmag_high))
 
             if self.did_read_zreds and self.cutgals_chisqmax:
                 guse &= (self.gals.chisq < self.config.chisq_max)
@@ -216,8 +230,9 @@ class ClusterRunner(object):
             self.gals = self.gals[guse]
 
             if len(self.gals) == 0:
-                self.config.logger.info("No good galaxies for %s in pixel %s" %
-                                        (self.runmode, self.hpix_logstr))
+                self.config.logger.info(
+                    "No good galaxies for %s in pixel %s" % (
+                    self.runmode, self.hpix_logstr))
                 return False
 
         # If we don't have a depth map, get ready to compute local depth
@@ -225,7 +240,10 @@ class ClusterRunner(object):
             try:
                 self.depthlim = DepthLim(self.gals.refmag, self.gals.refmag_err)
             except RuntimeError:
-                self.config.logger.info("Failed to obtain depth info in %s for pixel %s with %d galaxies.  Skipping pixel." % (self.runmode, self.hpix_logstr, len(self.gals)))
+                self.config.logger.info(
+                    "Failed to obtain depth info in %s for pixel %s with %d "
+                    "galaxies.  Skipping pixel." % (
+                    self.runmode, self.hpix_logstr, len(self.gals)))
                 return False
 
         # default limiting luminosity
@@ -243,10 +261,6 @@ class ClusterRunner(object):
         self.do_correct_zlambda = False
         self.do_pz = False
 
-        if len(self.config.d.hpix) == 0:
-            self.hpix_logstr = "All"
-        else:
-            self.hpix_logstr = ", ".join(str(x) for x in self.config.d.hpix)
 
         return True
 
@@ -274,7 +288,9 @@ class ClusterRunner(object):
         else:
             # Make sure they are unique
             if np.unique(self.cat.mem_match_id).size != self.cat.size:
-                raise RuntimeError("Input values for mem_match_id are not unique (and not all unset)")
+                raise RuntimeError(
+                    "Input values for mem_match_id are not unique (and not "
+                    "all unset)")
 
     def _reset_bad_values(self, cluster):
         """
@@ -305,19 +321,32 @@ class ClusterRunner(object):
 
         # General setup
         if not self._setup():
-            self.config.logger.info("Cluster initialization failed on pixel %s. No catalog will be produced." % (self.hpix_logstr))
+            self.config.logger.info(
+                "Cluster initialization failed on pixel %s. No catalog will "
+                "be produced." % (
+                    self.hpix_logstr))
             self.cat = None
             return
 
-        # Setup specific for a given task.  Will read in the galaxy catalog.
+        # Setup specific for a given task. Will read in the galaxy catalog.
         if not self._more_setup(*args, **kwargs):
-            self.config.logger.info("Cluster initialization failed on pixel %s. No catalog will be produced." % (self.hpix_logstr))
+            self.config.logger.info(
+                "Cluster initialization failed on pixel %s. No catalog will "
+                "be produced." % (
+                    self.hpix_logstr))
             self.cat = None
             return
+
+        if self.config.scanmode:
+            self.config.logger.info('Running in scanmode...')
+            scan_dist = ScanPlot(conf=self.config)
+            self.do_percolation_masking = False
+            self.match_centers_to_galaxies = False
 
         # Match centers and galaxies if required
         if self.match_centers_to_galaxies:
-            i0, i1, dist = self.gals.match_many(self.cat.ra, self.cat.dec, 1./3600.)
+            i0, i1, dist = self.gals.match_many(self.cat.ra, self.cat.dec,
+                                                1. / 3600.)
             self.cat.refmag[i0] = self.gals.refmag[i1]
             self.cat.refmag_err[i0] = self.gals.refmag_err[i1]
             self.cat.mag[i0, :] = self.gals.mag[i1, :]
@@ -330,7 +359,8 @@ class ClusterRunner(object):
 
         # loop over clusters...
         # at the moment, we are doing the matching once per cluster.
-        # if this proves too slow we can prematch bulk clusters as in the IDL code
+        # if this proves too slow we can prematch bulk clusters as in the IDL
+        # code
 
         if self.do_percolation_masking or self.doublerun:
             self.pgal = np.zeros(self.gals.size, dtype=np.float32)
@@ -350,214 +380,322 @@ class ClusterRunner(object):
                     self.config.logger.info("First iteration...")
                     self.do_percolation_masking = False
                 else:
-                    self.config.logger.info("Second iteration with percolation...")
+                    self.config.logger.info(
+                        "Second iteration with percolation...")
                     self._doublerun_sort()
                     self.do_percolation_masking = True
                     self.record_members = True
 
             cctr = 0
 
-            for cluster in self.cat:
-                cluster.maskgal_index = self.mask.select_maskgals_sample()
+            if self.config.scanmode:
+                scan = []
+                self.grid = self.cat.grid()
+                self.record_members = False
+            else:
+                self.grid = [self.cat]
 
-                if ((cctr % 1000) == 0):
-                    self.config.logger.info("%s: Working on cluster %d of %d" % (self.hpix_logstr, cctr, self.cat.size))
-                cctr += 1
+            for idx, cat in enumerate(self.grid):
+                for cluster in cat:
+                    cluster.maskgal_index = self.mask.select_maskgals_sample()
 
-                # Note that the cluster is set with .z if available! (which becomes .redshift)
-                maxmag = cluster.mstar - 2.5*np.log10(self.limlum)
+                    if ((cctr % 1000) == 0):
+                        self.config.logger.info(
+                            "%s: Working on cluster %d of %d" % (
+                            self.hpix_logstr, cctr, self.cat.size))
+                    cctr += 1
 
-                if self.read_gals:
-                    cluster.find_neighbors(self.maxrad, self.gals, megaparsec=True, maxmag=maxmag)
+                    # Note that the cluster is set with .z if available! (
+                    # which becomes .redshift)
+                    maxmag = cluster.mstar - 2.5 * np.log10(self.limlum)
 
-                    if cluster.neighbors.size == 0:
+                    if self.read_gals:
+                        cluster.find_neighbors(self.maxrad, self.gals,
+                                               megaparsec=True, maxmag=maxmag)
+
+                        if cluster.neighbors.size == 0:
+                            self._reset_bad_values(cluster)
+                            continue
+
+                        if self.do_percolation_masking:
+                            cluster.neighbors.pfree[:] = 1.0 - self.pgal[
+                                cluster.neighbors.index]
+                        else:
+                            cluster.neighbors.pfree[:] = 1.0
+
+                    # FIXME: add mean ebv computation here.
+
+                    if self.depthstr is None:
+                        # must approximate the limiting magnitude
+
+                        self.depthlim.calc_maskdepth(self.mask.maskgals,
+                                                     cluster.neighbors.refmag,
+                                                     cluster.neighbors.refmag_err)
+                    else:
+                        # get from the depth structure
+                        self.depthstr.calc_maskdepth(self.mask.maskgals,
+                                                     cluster.ra, cluster.dec,
+                                                     cluster.mpc_scale)
+
+                    cluster.lim_exptime = np.median(self.mask.maskgals.exptime)
+                    cluster.lim_limmag = np.median(self.mask.maskgals.limmag)
+                    cluster.lim_limmag_hard = self.config.limmag_catalog
+
+                    # And survey masking (this may be a dummy)
+                    self.mask.set_radmask(cluster)
+
+                    # And compute maskfrac here...approximate first computation
+                    inside, = np.where(self.mask.maskgals.r < 1.0)
+                    bad, = np.where(self.mask.maskgals.mark[inside] == 0)
+                    cluster.maskfrac = float(bad.size) / float(inside.size)
+
+                    if cluster.maskfrac == 1.0 or cluster.lim_limmag <= 1.0:
+                        # This is a very bad cluster, and should not be used
+                        bad_cluster = True
+                    else:
+                        # Do the cluster processing
+                        bad_cluster = self._process_cluster(cluster)
+
+                    if bad_cluster:
+                        # This is a bad cluster and we can't continue
                         self._reset_bad_values(cluster)
                         continue
 
-                    if self.do_percolation_masking:
-                        cluster.neighbors.pfree[:] = 1.0 - self.pgal[cluster.neighbors.index]
-                    else:
-                        cluster.neighbors.pfree[:] = 1.0
+                    if self.read_gals:
+                        if self.config.bkg_local_compute and not \
+                                self.config.bkg_local_use:
+                            if self.depthstr is None:
+                                depth = self.depthlim
+                            else:
+                                depth = self.depthstr
+                            cluster.bkg_local = cluster.compute_bkg_local(
+                                self.mask, depth)
 
-                # FIXME: add mean ebv computation here.
-
-                if self.depthstr is None:
-                    # must approximate the limiting magnitude
-
-                    self.depthlim.calc_maskdepth(self.mask.maskgals,
-                                                 cluster.neighbors.refmag, cluster.neighbors.refmag_err)
-                else:
-                    # get from the depth structure
-                    self.depthstr.calc_maskdepth(self.mask.maskgals,
-                                                 cluster.ra, cluster.dec, cluster.mpc_scale)
-
-                cluster.lim_exptime = np.median(self.mask.maskgals.exptime)
-                cluster.lim_limmag = np.median(self.mask.maskgals.limmag)
-                cluster.lim_limmag_hard = self.config.limmag_catalog
-
-                # And survey masking (this may be a dummy)
-                self.mask.set_radmask(cluster)
-
-                # And compute maskfrac here...approximate first computation
-                inside, = np.where(self.mask.maskgals.r < 1.0)
-                bad, = np.where(self.mask.maskgals.mark[inside] == 0)
-                cluster.maskfrac = float(bad.size) / float(inside.size)
-
-                if cluster.maskfrac == 1.0 or cluster.lim_limmag <= 1.0:
-                    # This is a very bad cluster, and should not be used
-                    bad_cluster = True
-                else:
-                    # Do the cluster processing
-                    bad_cluster = self._process_cluster(cluster)
-
-                if bad_cluster:
-                    # This is a bad cluster and we can't continue
-                    self._reset_bad_values(cluster)
-                    continue
-
-                if self.read_gals:
-                    if self.config.bkg_local_compute and not self.config.bkg_local_use:
-                        if self.depthstr is None:
-                            depth = self.depthlim
+                    if self.do_correct_zlambda and self.zlambda_corr is not \
+                            None and self.read_gals:
+                        if self.do_pz:
+                            zlam, zlam_e, pzbins, pzvals = \
+                                self.zlambda_corr.apply_correction(
+                                cluster.Lambda, cluster.z_lambda,
+                                cluster.z_lambda_e, pzbins=cluster.pzbins,
+                                pzvals=cluster.pz)
+                            cluster.pzbins = pzbins
+                            cluster.pzvals = pzvals
                         else:
-                            depth = self.depthstr
-                        cluster.bkg_local = cluster.compute_bkg_local(self.mask, depth)
+                            zlam, zlam_e = self.zlambda_corr.apply_correction(
+                                cluster.Lambda, cluster.z_lambda,
+                                cluster.z_lambda_e)
+                        cluster.z_lambda = zlam
+                        cluster.z_lambda_e = zlam_e
 
-                if self.do_correct_zlambda and self.zlambda_corr is not None and self.read_gals:
-                    if self.do_pz:
-                        zlam, zlam_e, pzbins, pzvals = self.zlambda_corr.apply_correction(cluster.Lambda,
-                                                                                          cluster.z_lambda,
-                                                                                          cluster.z_lambda_e,
-                                                                                          pzbins=cluster.pzbins,
-                                                                                          pzvals=cluster.pz)
-                        cluster.pzbins = pzbins
-                        cluster.pzvals = pzvals
+                    # compute updated maskfrac (always)
+                    inside, = np.where(self.mask.maskgals.r < cluster.r_lambda)
+                    bad, = np.where(self.mask.maskgals.mark[inside] == 0)
+                    if inside.size == 0:
+                        cluster.maskfrac = 1.0
                     else:
-                        zlam, zlam_e = self.zlambda_corr.apply_correction(cluster.Lambda,
-                                                                          cluster.z_lambda,
-                                                                          cluster.z_lambda_e)
-                    cluster.z_lambda = zlam
-                    cluster.z_lambda_e = zlam_e
+                        cluster.maskfrac = float(bad.size) / float(inside.size)
 
-                # compute updated maskfrac (always)
-                inside, = np.where(self.mask.maskgals.r < cluster.r_lambda)
-                bad, = np.where(self.mask.maskgals.mark[inside] == 0)
-                if inside.size == 0:
-                    cluster.maskfrac = 1.0
-                else:
-                    cluster.maskfrac = float(bad.size) / float(inside.size)
+                    # compute additional dlambda bits (if desired)
+                    if self.do_lam_plusminus and self.read_gals:
+                        cluster_temp = cluster.copy()
 
-                # compute additional dlambda bits (if desired)
-                if self.do_lam_plusminus and self.read_gals:
-                    cluster_temp = cluster.copy()
+                        cluster_temp.redshift = cluster.z_lambda - \
+                                                self.config.zlambda_epsilon
+                        lam_zmeps = cluster_temp.calc_richness(self.mask)
+                        elambda_zmeps = cluster_temp.lambda_e
+                        cluster_temp.redshift = cluster.z_lambda + \
+                                                self.config.zlambda_epsilon
+                        lam_zpeps = cluster_temp.calc_richness(self.mask)
+                        elambda_zpeps = cluster_temp.lambda_e
 
-                    cluster_temp.redshift = cluster.z_lambda - self.config.zlambda_epsilon
-                    lam_zmeps = cluster_temp.calc_richness(self.mask)
-                    elambda_zmeps = cluster_temp.lambda_e
-                    cluster_temp.redshift = cluster.z_lambda + self.config.zlambda_epsilon
-                    lam_zpeps = cluster_temp.calc_richness(self.mask)
-                    elambda_zpeps = cluster_temp.lambda_e
+                        if (lam_zmeps > 0 and lam_zpeps > 0):
+                            # Only compute if these are valid
+                            # During training, when we use the seed redshifts,
+                            #  we could fall out of the good range for a cluster
+                            cluster.dlambda_dz = (np.log(lam_zpeps) - np.log(
+                                lam_zmeps)) / (2. * self.config.zlambda_epsilon)
+                            cluster.dlambda_dz2 = (np.log(lam_zpeps) + np.log(
+                                lam_zmeps) - 2. * np.log(cluster.Lambda)) / (
+                                                              self.config.zlambda_epsilon ** 2.)
 
-                    if (lam_zmeps > 0 and lam_zpeps > 0):
-                        # Only compute if these are valid
-                        # During training, when we use the seed redshifts,
-                        #  we could fall out of the good range for a cluster
-                        cluster.dlambda_dz = (np.log(lam_zpeps) - np.log(lam_zmeps)) / (2. * self.config.zlambda_epsilon)
-                        cluster.dlambda_dz2 = (np.log(lam_zpeps) + np.log(lam_zmeps) - 2.*np.log(cluster.Lambda)) / (self.config.zlambda_epsilon**2.)
+                            cluster.dlambdavar_dz = (
+                                                                elambda_zpeps
+                                                                ** 2. -
+                                                                elambda_zmeps
+                                                                ** 2.) / (
+                                                                2. *
+                                                                self.config.zlambda_epsilon)
+                            cluster.dlambdavar_dz2 = (
+                                                                 elambda_zpeps ** 2. + elambda_zmeps ** 2. - 2. * cluster.Lambda_e ** 2.) / (
+                                                                 self.config.zlambda_epsilon ** 2.)
 
-                        cluster.dlambdavar_dz = (elambda_zpeps**2. - elambda_zmeps**2.) / (2.*self.config.zlambda_epsilon)
-                        cluster.dlambdavar_dz2 = (elambda_zpeps**2. + elambda_zmeps**2. - 2.*cluster.Lambda_e**2.) / (self.config.zlambda_epsilon**2.)
+                    # and record pfree if desired
+                    if self.do_percolation_masking and self.read_gals:
+                        # FIXME
+                        r_mask = (self.rmask_0 * (
+                                    cluster.Lambda / 100.) ** self.rmask_beta
+                                  * (
+                                              (1. + cluster.redshift) / (
+                                                  1. + self.rmask_zpivot)) **
+                                  self.rmask_gamma)
+                        if (r_mask < cluster.r_lambda):
+                            r_mask = cluster.r_lambda
+                        cluster.r_mask = r_mask
 
-                # and record pfree if desired
-                if self.do_percolation_masking and self.read_gals:
-                    # FIXME
-                    r_mask = (self.rmask_0 * (cluster.Lambda/100.)**self.rmask_beta *
-                              ((1. + cluster.redshift)/(1. + self.rmask_zpivot))**self.rmask_gamma)
-                    if (r_mask < cluster.r_lambda):
-                        r_mask = cluster.r_lambda
-                    cluster.r_mask = r_mask
+                        lim = cluster.mstar - 2.5 * np.log10(
+                            self.percolation_lmask)
 
-                    lim = cluster.mstar - 2.5*np.log10(self.percolation_lmask)
+                        u, = np.where((cluster.neighbors.refmag < lim) & (
+                                    cluster.neighbors.r < r_mask) & (
+                                                  cluster.neighbors.p > 0.0))
+                        if (u.size > 0):
+                            self.pgal[cluster.neighbors.index[u]] += \
+                            cluster.neighbors.p[u]
 
-                    u, = np.where((cluster.neighbors.refmag < lim) &
-                                  (cluster.neighbors.r < r_mask) &
-                                  (cluster.neighbors.p > 0.0))
-                    if (u.size > 0):
-                        self.pgal[cluster.neighbors.index[u]] += cluster.neighbors.p[u]
+                    # and save members
+                    # Note that this is probably horribly inefficient for memory
+                    #  usage right now, but will start here and fix later if it
+                    #  is a problem.
 
-                # and save members
-                # Note that this is probably horribly inefficient for memory
-                #  usage right now, but will start here and fix later if it
-                #  is a problem.
+                    if self.read_gals:
+                        pfree_temp = cluster.neighbors.pfree[:]
 
-                if self.read_gals:
-                    pfree_temp = cluster.neighbors.pfree[:]
-
-                if (self.use_memradius or self.use_memlum) and self.read_gals:
-                    ok = (cluster.neighbors.p > 0.01)
-
-                    if self.use_memradius:
-                        ok &= (cluster.neighbors.r < self.config.percolation_memradius * cluster.r_lambda)
-                    if self.use_memlum:
-                        ok &= (cluster.neighbors.refmag < (cluster.mstar - 2.5*np.log10(self.config.percolation_memlum)))
-
-                    # And set pfree_temp to zero when it is not okay
-                    pfree_temp[~ok] = 0.0
-                elif self.read_gals:
-                    # Only save members where pmem > 0.01 (for space)
-                    ok = (cluster.neighbors.pmem > 0.01)
-                    pfree_temp[~ok] = 0.0
-
-                if self.record_members and self.read_gals:
-                    pfree_temp = cluster.neighbors.pfree[:]
-
-                    if self.use_memradius or self.use_memlum:
+                    if (
+                            self.use_memradius or self.use_memlum) and \
+                            self.read_gals:
                         ok = (cluster.neighbors.p > 0.01)
 
                         if self.use_memradius:
-                            ok &= (cluster.neighbors.r < self.config.percolation_memradius * cluster.r_lambda)
+                            ok &= (
+                                        cluster.neighbors.r <
+                                        self.config.percolation_memradius *
+                                        cluster.r_lambda)
                         if self.use_memlum:
-                            ok &= (cluster.neighbors.refmag < (cluster.mstar - 2.5*np.log10(self.config.percolation_memlum)))
+                            ok &= (cluster.neighbors.refmag < (
+                                        cluster.mstar - 2.5 * np.log10(
+                                    self.config.percolation_memlum)))
 
                         # And set pfree_temp to zero when it is not okay
                         pfree_temp[~ok] = 0.0
-                    else:
+                    elif self.read_gals:
                         # Only save members where pmem > 0.01 (for space)
                         ok = (cluster.neighbors.pmem > 0.01)
                         pfree_temp[~ok] = 0.0
 
-                    memuse, = np.where(pfree_temp > 0.01)
-                    mem_temp = Catalog.zeros(memuse.size, dtype=self.config.member_dtype)
+                    if self.record_members and self.read_gals:
+                        pfree_temp = cluster.neighbors.pfree[:]
 
-                    mem_temp.mem_match_id[:] = cluster.mem_match_id
-                    mem_temp.id[:] = cluster.neighbors.id[memuse]
-                    mem_temp.z[:] = cluster.redshift
-                    mem_temp.ra[:] = cluster.neighbors.ra[memuse]
-                    mem_temp.dec[:] = cluster.neighbors.dec[memuse]
-                    mem_temp.r[:] = cluster.neighbors.r[memuse]
-                    mem_temp.p[:] = cluster.neighbors.p[memuse]
-                    mem_temp.pfree[:] = pfree_temp[memuse]
-                    mem_temp.pcol[:] = cluster.neighbors.pcol[memuse]
-                    mem_temp.theta_i[:] = cluster.neighbors.theta_i[memuse]
-                    mem_temp.theta_r[:] = cluster.neighbors.theta_r[memuse]
-                    mem_temp.refmag[:] = cluster.neighbors.refmag[memuse]
-                    mem_temp.refmag_err[:] = cluster.neighbors.refmag_err[memuse]
-                    if (self.did_read_zreds):
-                        mem_temp.zred[:] = cluster.neighbors.zred[memuse]
-                        mem_temp.zred_e[:] = cluster.neighbors.zred_e[memuse]
-                    mem_temp.chisq[:] = cluster.neighbors.chisq[memuse]
-                    mem_temp.ebv[:] = cluster.neighbors.ebv[memuse]
-                    mem_temp.mag[:, :] = cluster.neighbors.mag[memuse, :]
-                    mem_temp.mag_err[:, :] = cluster.neighbors.mag_err[memuse, :]
+                        if self.use_memradius or self.use_memlum:
+                            ok = (cluster.neighbors.p > 0.01)
 
-                    # Worried this is going to be slow...
-                    if self.members is None:
-                        self.members = mem_temp
-                    else:
-                        self.members.append(mem_temp)
+                            if self.use_memradius:
+                                ok &= (
+                                            cluster.neighbors.r <
+                                            self.config.percolation_memradius
+                                            * cluster.r_lambda)
+                            if self.use_memlum:
+                                ok &= (cluster.neighbors.refmag < (
+                                            cluster.mstar - 2.5 * np.log10(
+                                        self.config.percolation_memlum)))
 
-        self._postprocess()
-        self._cleanup()
+                            # And set pfree_temp to zero when it is not okay
+                            pfree_temp[~ok] = 0.0
+                        else:
+                            # Only save members where pmem > 0.01 (for space)
+                            ok = (cluster.neighbors.pmem > 0.01)
+                            pfree_temp[~ok] = 0.0
+
+                        memuse, = np.where(pfree_temp > 0.01)
+                        mem_temp = Catalog.zeros(memuse.size,
+                                                 dtype=self.config.member_dtype)
+
+                        mem_temp.mem_match_id[:] = cluster.mem_match_id
+                        mem_temp.id[:] = cluster.neighbors.id[memuse]
+                        mem_temp.z[:] = cluster.redshift
+                        mem_temp.ra[:] = cluster.neighbors.ra[memuse]
+                        mem_temp.dec[:] = cluster.neighbors.dec[memuse]
+                        mem_temp.r[:] = cluster.neighbors.r[memuse]
+                        mem_temp.p[:] = cluster.neighbors.p[memuse]
+                        mem_temp.pfree[:] = pfree_temp[memuse]
+                        mem_temp.pcol[:] = cluster.neighbors.pcol[memuse]
+                        mem_temp.theta_i[:] = cluster.neighbors.theta_i[memuse]
+                        mem_temp.theta_r[:] = cluster.neighbors.theta_r[memuse]
+                        mem_temp.refmag[:] = cluster.neighbors.refmag[memuse]
+                        mem_temp.refmag_err[:] = cluster.neighbors.refmag_err[
+                            memuse]
+                        if (self.did_read_zreds):
+                            mem_temp.zred[:] = cluster.neighbors.zred[memuse]
+                            mem_temp.zred_e[:] = cluster.neighbors.zred_e[
+                                memuse]
+                        mem_temp.chisq[:] = cluster.neighbors.chisq[memuse]
+                        mem_temp.ebv[:] = cluster.neighbors.ebv[memuse]
+                        mem_temp.mag[:, :] = cluster.neighbors.mag[memuse, :]
+                        mem_temp.mag_err[:, :] = cluster.neighbors.mag_err[
+                                                 memuse, :]
+
+                        # Worried this is going to be slow...
+                        if self.members is None:
+                            self.members = mem_temp
+                        else:
+                            self.members.append(mem_temp)
+
+                if self.config.scanmode:
+                    # Overwrite z_lambda with grid redshift.
+                    cat.z_lambda = cat.z
+                    cat.z_lambda_e = self.config.scanmode_step
+                    peak = np.argmax(cat.Lambda)
+                    self.cat[idx] = cat._ndarray[peak]
+                    mem_match_id = self.cat[idx].mem_match_id
+                    scan.append([cat.Lambda, cat.Lambda_e])
+
+                    if self.config.scanmode_plot:
+                        scan_dist.plot_values(cat, mem_match_id=mem_match_id)
+
+        if self.config.scanmode:
+
+            # `scan` only contains lambda and lambda_e info as redshift info is
+            # the same for all scans on all clusters.
+            scan, scan_size = np.array(scan), cat.z.size
+
+            # Add scan fields to ClusterCatalog.
+            scan_dtype = [('z_scan', 'f4', scan_size),
+                          ('z_scan_e', 'f4', scan_size),
+                          ('z_scan_peak', 'f4'),
+                          ('z_scan_peak_e', 'f4'),
+                          ('lambda_scan', 'f4', scan_size),
+                          ('lambda_scan_e', 'f4', scan_size),
+                          ('lambda_scan_peak', 'f4'),
+                          ('lambda_scan_peak_e', 'f4')
+                          ]
+            self.cat.add_fields(newdtype=scan_dtype)
+
+            # Add scan information for all clusters in the catalog.
+            lambda_scan, lambda_scan_e = scan[:, 0], scan[:, 1]
+            peak = np.argmax(lambda_scan, axis=1)
+            self.cat['lambda_scan'] = lambda_scan
+            self.cat['lambda_scan_e'] = lambda_scan_e
+            self.cat['lambda_scan_peak'] = lambda_scan[:, peak].diagonal()
+            self.cat['lambda_scan_peak_e'] = lambda_scan_e[:, peak].diagonal()
+            self.cat['z_scan'] = cat.z_lambda
+            self.cat['z_scan_e'] = cat.z_lambda_e
+            self.cat['z_scan_peak'] = cat.z_lambda[peak]
+            self.cat['z_scan_peak_e'] = cat.z_lambda_e[peak]
+
+            # Set for the next run using the scan peak for the initial cluster.
+            self.config.logger.info('Turning off scanmode...')
+            self.config.scanmode = False
+            self.match_centers_to_galaxies = True
+            self.record_members = True
+            self.do_percolation_masking = self.config.runcat_percolation_masking
+
+            # Override _setup to prevent self.cat from being overwritten.
+            self._setup = lambda *args, **kwargs: True
+            self._more_setup = lambda *args, **kwargs: True
+            self.run(*args, **kwargs)
+        else:
+            self._postprocess()
+            self._cleanup()
 
     def _postprocess(self):
         """
@@ -597,7 +735,8 @@ class ClusterRunner(object):
 
         gc.collect()
 
-    def output(self, savemembers=True, withversion=True, clobber=False, outbase=None):
+    def output(self, savemembers=True, withversion=True, clobber=False,
+               outbase=None):
         """
         Output the cluster catalog.
 
@@ -606,31 +745,41 @@ class ClusterRunner(object):
         savemembers: `bool`, optional
            Save the members along with the catalog?  Default is True.
         withversion: `bool`, optional
-           Should the filename contain the redmapper code version?  Default is True.
+           Should the filename contain the redmapper code version?  Default
+           is True.
         clobber: `bool`, optional
            Clobber existing file?  Default is False.
         outbase: `str`, optional
-           Override file output base (from self.config.d.outbase).  Default is None.
+           Override file output base (from self.config.d.outbase).  Default
+           is None.
         """
 
         # Try with a universal method.
         # It will save the underlying _ndarrays of the Cluster and
         # (optionally) Member catalogs.
 
-        self._filename = self.config.redmapper_filename(self.filetype + '_catalog', withversion=withversion, outbase=outbase)
+        self._filename = self.config.redmapper_filename(
+            self.filetype + '_catalog', withversion=withversion,
+            outbase=outbase)
 
         if self.cat is None:
-            self.config.logger.info("Warning: no catalog generated for %s" % (self._filename))
+            self.config.logger.info(
+                "Warning: no catalog generated for %s" % (self._filename))
             return
 
-        self.config.logger.info("Writing catalog to file: %s" % (self._filename))
+        self.config.logger.info(
+            "Writing catalog to file: %s" % (self._filename))
+
         self.cat.to_fits_file(self._filename, clobber=clobber)
 
         if savemembers:
             if self.members is None:
-                self.config.logger.info("Warning: no members generated for %s" % (self._filename))
+                self.config.logger.info(
+                    "Warning: no members generated for %s" % (self._filename))
                 return
-            memfilename = self.config.redmapper_filename(self.filetype + '_catalog_members', withversion=withversion, outbase=outbase)
+            memfilename = self.config.redmapper_filename(
+                self.filetype + '_catalog_members', withversion=withversion,
+                outbase=outbase)
             self.members.to_fits_file(memfilename, clobber=clobber)
 
     @property
