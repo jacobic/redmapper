@@ -171,7 +171,10 @@ class CenteringWcenZred(Centering):
         u, = np.where(self.cluster.neighbors.p > 0.0)
 
         # This is the maximum radius in units of degrees (r_lambda is Mpc; mpc_scale is Mpc / degree)
-        maxrad = 1.1 * self.cluster.r_lambda / self.cluster.mpc_scale
+        # maxrad = 1.1 * self.cluster.r_lambda / self.cluster.mpc_scale
+
+        # @jacobic max radius is 400Kpc in CODEX. #TODO: make this configurable.
+        maxrad = 0.4 / self.cluster.mpc_scale
 
         htm_matcher = esutil.htm.Matcher(self.cluster.neighbors.depth,
                                          self.cluster.neighbors.ra[use],
@@ -415,7 +418,9 @@ class CenteringRandomSatellite(Centering):
 
         pdf = self.cluster.neighbors.pmem[st]
         pdf /= np.sum(pdf)
-        cdf = np.cumsum(pdf)
+        # @jacobic cumsum has a bug for large arrays!
+        # cdf = np.cumsum(pdf) #@jacobic this array is small so should be fine.
+        cdf = np.cumsum(pdf.tolist())
         cdfi = (cdf * st.size).astype(np.int32)
 
         rand = (np.random.uniform(size=1) * st.size).astype(np.int32)
