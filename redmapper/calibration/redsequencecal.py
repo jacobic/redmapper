@@ -132,9 +132,12 @@ class RedSequenceCalibrator(object):
             self.stag[j] = 'slope%02d' % (j)
 
             node_dict[self.ztag[j]] = make_nodes(self.config.zrange, self.config.calib_color_nodesizes[j],
+                                                 minnode=self.config.calib_color_minnodes[j],
                                                  maxnode=self.config.calib_color_maxnodes[j])
             node_dict[self.zstag[j]] = make_nodes(self.config.zrange, self.config.calib_slope_nodesizes[j],
-                                                  maxnode=self.config.calib_color_maxnodes[j])
+                                                  minnode=self.config.calib_color_minnodes[j],
+                                                  maxnode=self.config.calib_color_maxnodes[j]
+            )
 
             dtype.extend([(self.ztag[j], 'f4', node_dict[self.ztag[j]].size),
                           (self.ctag[j], 'f4', node_dict[self.ztag[j]].size),
@@ -797,8 +800,10 @@ class RedSequenceCalibrator(object):
         hdr['MSTARBAN'] = self.config.mstar_band
         hdr['LIMMAG'] = self.config.limmag_catalog
         # Saved with larger cushion that seems to work well
-        hdr['ZRANGE0'] = np.clip(self.config.zrange[0] - 0.1, 0.01, None)
-        hdr['ZRANGE1'] = np.clip(self.config.zrange[1] + 0.25, None, zmax)
+        #@jacobic, clip can lead to floating point errors. round for safety.
+        #@jacobic e.g. zmax=1.2 (np.float64) will have a zrange1=1.2000000476837158 (np.float64)
+        hdr['ZRANGE0'] = np.around(np.clip(self.config.zrange[0] - 0.1, 0.01, None), 5)
+        hdr['ZRANGE1'] =np.around(np.clip(self.config.zrange[1] + 0.25, None, zmax), 5)
         hdr['ALPHA'] = self.config.calib_lumfunc_alpha
         hdr['ZBINFINE'] = self.config.zredc_binsize_fine
         hdr['ZBINCOAR'] = self.config.zredc_binsize_coarse
