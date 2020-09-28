@@ -215,61 +215,22 @@ with open(jobfile, 'w') as jf:
         jf.write("#PBS -l mem=%dmb\n" % (memory))
         jf.write("#PBS -j oe\n")
         jf.write('N_CPU=%d\n' % (n_nodes * batchconfig[batchmode]['ppn']))
-    elif ((batchconfig[batchmode]['batch'] == 'slurm') and
-          (batchconfig[batchmode]['taskfarmer'])):
-        if ((batchconfig[batchmode]['qos'] == '' or
-             batchconfig[batchmode]['constraint'] == '' or
-             batchconfig[batchmode]['cpus_per_node'] < 1 or
-             batchconfig[batchmode]['mem_per_node'] < 1 or
-             batchconfig[batchmode]['image'] == '')):
-            raise RuntimeError("For taskfarmer, must set qos/constraint/cpus_per_node/mem_per_node/image")
-        if (args.nodes < 2):
-            raise RuntimeError("For taskfarmer, we require at least 2 nodes")
-        write_jobarray = False
 
-        # NERSC slurm + taskfarmer
-        wrapper_file = os.path.abspath(os.path.join(jobpath, '%s_%d.sh' % (jobname, index + 1)))
-        task_file = os.path.abspath(os.path.join(jobpath, '%s_%d.txt' % (jobname, index + 1)))
+    elif (batchconfig[batchmode]['batch'] == 'slurm'):
+        # SLURM mode
+        ppn = batchconfig[batchmode]['ppn']
+        n_nodes = int(np.ceil(float(hpix_run.size) / float(ppn)))
+        jf.write("#SBATCH -p %s\n" % (batchconfig[batchmode]['queue']))
+        jf.write("#SBATCH -N s=%d\n" % (n_nodes))
+        jf.write("#SBATCH --ntasks-per-node %d\n" % (ppn))
+        jf.write("#SBATCH -t=%d:00:00\n" % (int(walltime / 60)))
+        jf.write("#SBATCH --mem %dmb\n" % (memory/n_nodes))
+        jf.write("#SBATCH -J %s[1-%d]\n" % (jobname, hpix_run.size))
 
-        # First, we need to write a wrapper script
-        with open(wrapper_file, 'w') as wf:
-            cmd = run_command % ('$1')
-            wf.write("#!/bin/bash\n")
-            wf.write('shifter --image=%s /bin/bash -c ". /opt/redmapper/startup.sh && %s"' %
-                     (batchconfig[batchmode]['image'], cmd))
-
-        st = os.stat(wrapper_file)
-        os.chmod(wrapper_file, st.st_mode | 0o110)
-
-        # Second, we need to write a tasks file
-        # Need to make sure that wrapper_file is the full absolute path
-        with open(task_file, 'w') as tf:
-            for hpix in hpix_run:
-                tf.write("%s %d\n" % (wrapper_file, hpix))
-
-        # Third, we need to create the batch submission script
-        nrun_per_node = int(np.clip(batchconfig[batchmode]['mem_per_node'] / memory,
-                                    None,
-                                    batchconfig[batchmode]['cpus_per_node']))
-        nthreads = (args.nodes - 1) * nrun_per_node
-
-        time = np.clip((len(hpix_run) * float(walltime)) / nthreads, walltime, None)
-
-        jf.write("#!/bin/bash\n")
-        jf.write("#SBATCH --qos=%s\n" % (batchconfig[batchmode]['qos']))
-        jf.write("#SBATCH --constraint=%s\n" % (batchconfig[batchmode]['constraint']))
-        jf.write("#SBATCH --cpus-per-task=%d\n" % (batchconfig[batchmode]['cpus_per_node']))
-        jf.write("#SBATCH --nodes=%d\n" % (args.nodes))
-        jf.write("#SBATCH --time=%s\n" % (int(time)))
-        jf.write("export PATH=$PATH:/usr/common/tig/taskfarmer/1.5/bin\n")
-        jf.write("export THREADS=%d\n" % (nthreads))
-        jf.write("runcommands.sh %s\n" % (task_file))
-    elif ((batchconfig[batchmode]['batch'] == 'slurm') and
-          (not batchconfig[batchmode]['taskfarmer'])):
-        raise NotImplementedError("Basic slurm submission not implemented yet.")
+        index_string = '${pixarr[SLURM_ARRAY_TASK_ID-1]}'
     else:
         # Nothing else supported
-        raise RuntimeError("Only LSF, PBS and slurm/taskfarmer supported at this time.")
+        raise RuntimeError("Only LSF, PBS and SLURM supported at this time.")
 
     if write_jobarray:
         jf.write("pixarr=(")
