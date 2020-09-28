@@ -76,7 +76,7 @@ class SelectSpecSeeds(object):
         spec = spec[use]
 
         # Match spectra to galaxies
-        i0, i1, dists = gals.match_many(spec.ra, spec.dec, 3./3600., maxmatch=1)
+        i0, i1, dists = gals.match_many(spec.ra, spec.dec, 1./3600., maxmatch=1)
 
         gals = gals[i1]
         spec = spec[i0]
