@@ -7,6 +7,7 @@ import os
 import numpy as np
 import glob
 
+from ..runcat import RunCatalog
 from ..configuration import Configuration
 from ..utilities import make_lockfile
 from ..run_firstpass import RunFirstPass
@@ -236,9 +237,17 @@ class RunZmaskPixelTask(object):
         self.config.logger.info("Running zmask on pixel %d" % (self.pixel))
 
         rand_zmask = RunRandomsZmask(self.config)
+        filename = self.config.redmapper_filename(
+            rand_zmask.filetype + '_catalog', withversion=False)
 
-        if not os.path.isfile(rand_zmask.filename):
-            rand_zmask.run()
-            rand_zmask.output(savemembers=False, withversion=False)
+        try:
+            if not os.path.isfile(filename):
+                rand_zmask.run()
+                rand_zmask.output(savemembers=False, withversion=False)
+            else:
+                self.config.logger.info("%s exists" % filename)
+        except Exception as e:
+            self.config.logger.info("Exception occurred.")
+            print(e)
 
         # All done
