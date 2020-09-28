@@ -1,5 +1,7 @@
 from __future__ import division, absolute_import, print_function
 from past.builtins import xrange
+import pickle
+import tempfile
 
 import unittest, os
 import numpy.testing as testing
@@ -37,6 +39,26 @@ class ReadConfigTestCase(unittest.TestCase):
         testing.assert_almost_equal(config.zeropoint,22.5)
         self.assertEqual(config.ref_ind,3)
         # all other values in the config are None
+
+
+class PickleConfigTestCase(unittest.TestCase):
+
+    """
+    Tests for pickling the redmapper.Configuration class.
+    """
+
+    def runTest(self):
+        file_name = 'testconfig.yaml'
+        file_path = 'data_for_tests'
+
+        config = redmapper.Configuration('%s/%s' % (file_path, file_name))
+        with tempfile.NamedTemporaryFile() as temp:
+            with open(temp.name, 'wb') as f:
+                pickle.dump(config, f)
+            with open(temp.name, 'rb') as f:
+                _config = pickle.load(f)
+        assert _config == config
+
 
 if __name__=='__main__':
     unittest.main()

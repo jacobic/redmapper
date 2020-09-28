@@ -566,7 +566,7 @@ class BackgroundGenerator(object):
             for j in xrange(self.nlnchisqbins):
                 sigma_lng_sub[:, j, i] = field2[:, j] / (self.areas * lnbinsizes)
 
-        self.config.logger.info("Finished %.2f < z < %.2f in %.1f seconds" % (zbins_use[0], zbins_use[-1],
+        self.config.logger.info("Finished %.4f < z < %.4f in %.1f seconds" % (zbins_use[0], zbins_use[-1],
                                                                               time.time() - starttime))
 
         return (zbinmark, sigma_g_sub, sigma_lng_sub)
