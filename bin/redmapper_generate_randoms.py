@@ -15,10 +15,15 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--nrands', action='store', type=int, required=True,
                         help='Number of randoms to generate')
 
+    parser.add_argument('-m', '--mask', action='store', type=int,
+                        required=True,
+                        help='Apply geometric mask to randoms')
+
     args = parser.parse_args()
 
     config = redmapper.Configuration(args.configfile)
 
-    generateRandoms = redmapper.GenerateRandoms(config)
+    generateRandoms = redmapper.GenerateRandoms(config,
+                                                use_geometry_mask=args.mask)
     generateRandoms.generate_randoms(args.nrands)
 
