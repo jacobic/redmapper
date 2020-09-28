@@ -706,6 +706,9 @@ class ZlambdaCorrectionPar(object):
             correction = self.offset[i, :] + self.slope[i, :] * np.log(lam / self.zlambda_pivot)
             extra_err = np.interp(zlam, self.z, self.scatter[i, :])
 
+            # @jacobic this is a hack, but the correction cannot be less than the minimum redshift of the scan!
+            # This only seems to be a problem at in the min redshift bin when inspecting the zambda files.
+            correction = np.clip(correction, -zlam + 1e-10, None)  # TODO: fix this / open new issue.
             dz = np.interp(zlam, self.z, correction)
 
             ozlam = copy.deepcopy(zlam)
