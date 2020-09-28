@@ -153,6 +153,7 @@ class SpecPlot(object):
         # We will need to remove any underscores in name for some usage...
         name_clean = name.replace('_', '')
         name_clean = name_clean.replace('^', '')
+        name_e = f'\delta_{{{name}}}'
 
         use, = np.where(z_spec > 0.0)
 
@@ -167,7 +168,10 @@ class SpecPlot(object):
         ax = fig.add_subplot(211)
 
         # Need to do the map, then need to get the levels and make a contour
-        z_bins, z_map = self._make_photoz_map(z_spec[use], z_phot[use])
+        # z_bins, z_map = self._make_photoz_map(z_spec[use], z_phot[use])
+
+        #@jacobic: mara prefers z_spec on x axis
+        z_bins, z_map = self._make_photoz_map(z_phot[use], z_spec[use])
 
         nlevs = 5
         levbinsize = (1.0 - 0.1) / nlevs
@@ -189,7 +193,8 @@ class SpecPlot(object):
         ax.yaxis.set_minor_locator(minorLocator)
         minorLocator = MultipleLocator(0.02)
         ax.xaxis.set_minor_locator(minorLocator)
-        ax.set_ylabel(r'$%s$' % (specname), fontsize=16)
+        # ax.set_ylabel(r'$%s$' % (specname), fontsize=16)
+        ax.set_ylabel(fr'${name}$', fontsize=16)
 
         if calib_zrange is not None:
             if len(calib_zrange) == 2:
@@ -199,19 +204,27 @@ class SpecPlot(object):
 
         # Plot the outliers
         bad, = np.where(np.abs(z_phot[use] - z_spec[use]) / z_phot_e[use] > self.nsig)
+        self.fracout = float(bad.size) / float(use.size)
         if bad.size > 0:
-            ax.plot(z_phot[use[bad]], z_spec[use[bad]], 'r*')
+            # ax.plot(z_phot[use[bad]], z_spec[use[bad]], 'r*')
+            ax.plot(z_spec[use[bad]],  z_phot[use[bad]], 'r*',
+                    label=f'Outliers ({self.fracout * 100:.2f}%)')
 
-        fracout = float(bad.size) / float(use.size)
+        ax.legend(loc=4, fontsize=14, title=f'{len(z_spec)} Spectroscopic '
+                                            f'Clusters')
 
-        fout_label = r'$f_\mathrm{out} = %7.4f$' % (fracout)
-        ax.annotate(fout_label, (plot_xrange[0] + 0.1, self.config.zrange[1]),
-                    xycoords='data', ha='left', va='top', fontsize=16)
+
+        # fout_label = fr'$f_\mathrm{{out}}({self.nsig:.2f} std) ={fracout:7.4f}$'
+        # fout_label = fr'$f_\mathrm{{out}}({specname} - {name} > {int(self.nsig):d} {name_e}) = {fracout:7.4f}$'
+        # ax.annotate(fout_label, (plot_xrange[0] + 0.1, self.config.zrange[1]),
+        #             xycoords='data', ha='left', va='top', fontsize=16)
 
         ax.set_title(title)
 
         # Compute the bias / scatter
-        h, rev = esutil.stat.histogram(z_phot[use], min=0.0, max=self.config.zrange[1]-0.001, rev=True, binsize=self.binsize)
+        # h, rev = esutil.stat.histogram(z_phot[use], min=0.0, max=self.config.zrange[1]-0.001, rev=True, binsize=self.binsize)
+        h, rev = esutil.stat.histogram(z_spec[use], min=0.0,
+                                       max=self.config.zrange[1]-0.001, rev=True, binsize=self.binsize)
         bins = np.arange(h.size) * self.binsize + 0.0 + self.binsize/2.
 
         bias = np.zeros(h.size)
@@ -247,8 +260,9 @@ class SpecPlot(object):
         ax2.tick_params(axis='both', which='major', labelsize=14, length=5, left=True, right=True, top=True, bottom=True, direction='in')
         ax2.tick_params(axis='y', which='minor', left=True, right=True, direction='in')
         ax2.tick_params(axis='x', which='minor', bottom=True, top=True, direction='in')
-        ax2.set_xlabel(r'$%s$' % (name), fontsize=16)
-        ax2.set_ylabel(r'$%s - %s$' % (specname, name), fontsize=16)
+        # ax2.set_xlabel(r'$%s$' % (name), fontsize=16)
+        ax2.set_xlabel(fr'${specname}$', fontsize=16)
+        ax2.set_ylabel(fr'${specname} - {name}$', fontsize=16)
         minorLocator = MultipleLocator(0.02)
         ax2.xaxis.set_minor_locator(minorLocator)
         minorLocator = MultipleLocator(0.002)
@@ -427,7 +441,10 @@ class NzPlot(object):
                          (cluster.pzbins[-1] - cluster.pzbins[0]) + cluster.pzbins[0])
                 yvals = interpol(cluster.pz, cluster.pzbins, xvals)
                 pdf = yvals / np.sum(yvals)
-                cdf = np.cumsum(pdf)
+                # @jacobic cumsum has a bug for large arrays!
+                # cdf = np.cumsum(pdf) #@jacobic this array is small so
+                # should be fine.
+                cdf = np.cumsum(pdf.tolist())
                 cdfi = (cdf * xvals.size).astype(np.int32)
                 rand = (np.random.uniform(size=1)*nsampbin).astype(np.int32)
                 test, = np.where(cdfi >= rand)
@@ -560,6 +577,122 @@ class NzPlot(object):
                      title='%s: %3.1f-%02d' % (name, eta, int(n0)),
                      redmapper_name=redmapper_name,
                      calib_zrange=calib_zrange, withversion=withversion)
+
+    @property
+    def filename(self):
+        """
+        Get the filename that should be used to save the figure.
+
+        Returns
+        -------
+        filename: `str`
+           Formatted filename to save figure.
+        """
+        return self.config.redmapper_filename(self._redmapper_name, paths=(self.config.plotpath,),
+                                              withversion=self._withversion, filetype='png')
+
+
+class ScanPlot(object):
+    """
+    Class to make a plot with cluster catalog n(z) with comoving coordinates.
+    """
+
+    def __init__(self, conf, binsize=0.02):
+        """
+        Instantiate a NzPlot.
+
+        Parameters
+        ----------
+        conf: `redmapper.Configuration` or `str`
+           Configuration object or filename
+        binsize: `float`, optional
+           Redshift smoothing bin size.  Default is 0.02.
+        """
+        if not isinstance(conf, Configuration):
+            self.config = Configuration(conf)
+        else:
+            self.config = conf
+
+        self.binsize = binsize
+        self._redmapper_name = 'scan'
+        self._withversion = False
+
+    def plot_values(self, cat, mem_match_id, withversion=False):
+        """
+        Plot the n(z) for a cluster catalog, using the default catalog values.
+
+        This plot will sample redshifts from z_lambda +/- z_lambda_e.
+
+        Parameters
+        ----------
+        cat: `redmapper.ClusterCatalog`
+           Cluster catalog to plot.
+        areastr: `redmapper.Catalog`
+           Area structure, with .z and .area
+        nosamp: `bool`, optional
+           Do not sample from z_lambda.  Default is False.
+        withversion: `bool`, optional
+           Plots should be saved with the version string.
+        """
+
+        self.plot_scan(mem_match_id=mem_match_id, z=cat.z_lambda, Lambda=cat.Lambda,
+                       z_e=cat.z_lambda_e,
+                       Lambda_e=cat.Lambda_e, xlabel=r'$z_{\lambda}$',
+                       ylabel=r'$\lambda$', withversion=withversion)
+
+    def plot_scan(self, mem_match_id, z, Lambda, z_e, Lambda_e, xlabel=None,
+                  ylabel=None, title=None, redmapper_name='scan',
+                  withversion=False):
+        """
+        Plot the n(z) for an arbitrary list of objects
+
+        Parameters
+        ----------
+        z: `np.array`
+           Float array of redshifts
+        areastr: `redmapper.Catalog`
+           Structure describing area as a function of redshift
+        zrange: `np.array` or `list`
+           Redshift range to plot
+        xlabel: `str`, optional
+           Plot x label.  Default is None.
+        ylabel: `str`, optional
+           Plot y label.  Default is None.
+        title: `str`, optional
+           Plot title.  Default is None.
+        redmapper_name: `str`, optional
+           Name to put into filename.  Default is 'nz'
+        calib_zrange: `np.array` or `list`
+           Calibration redshift range to overplot
+        withversion: `bool`, optional
+           Plots should be saved with the version string.
+        """
+
+        import matplotlib.pyplot as plt
+
+        fig = plt.figure(1, figsize=(8, 6))
+        fig.clf()
+
+        ax = fig.add_subplot(111)
+
+        # Tidy up -ve richness values which correspond to bad clusters.
+        Lambda[Lambda < 0] = 0
+
+        ax.errorbar(z, Lambda, yerr=Lambda_e, xerr=z_e, fmt='r.', markersize=8)
+        if xlabel is not None:
+            ax.set_xlabel(xlabel, fontsize=16)
+        if ylabel is not None:
+            ax.set_ylabel(ylabel, fontsize=16)
+        if title is not None:
+            ax.set_title(title, fontsize=16)
+        ax.tick_params(axis='both', which='major', labelsize=14)
+
+        fig.tight_layout()
+
+        self._redmapper_name = redmapper_name + '_' + str(mem_match_id)
+        self._withversion = withversion
+        fig.savefig(self.filename)
+        plt.close(fig)
 
     @property
     def filename(self):
