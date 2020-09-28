@@ -318,7 +318,7 @@ class ColorBackgroundGenerator(object):
 
     def run(self, clobber=False):
         """
-        Generate the color galaxyt background.  The output filename is
+        Generate the color galaxy background.  The output filename is
         specified in self.config.bkgfile_color.
 
         Parameters
