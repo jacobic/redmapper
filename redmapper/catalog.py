@@ -116,6 +116,35 @@ class DataObject(object):
         self._lower_array(array)
         self._ndarray = self._merge_arrays([self._ndarray, array])
 
+    def to_pandas(self, to_list=True):
+        """
+        Parameters
+        ----------
+        to_list: `bool`, optional
+            Convert ndarray object elements to lists?
+        """
+        # TODO: add pandas to requirements.
+        import pandas as pd
+        # Convert to list first to support higher dimensional arrays.
+        data = self._ndarray.tolist()
+        df = pd.DataFrame.from_records(data, columns=self.dtype.names)
+        if to_list:
+            df = df.applymap(lambda _: _.tolist() if isinstance(_, np.ndarray) else _)
+        return df
+
+    @classmethod
+    def from_pandas(cls, df, from_list=True):
+        """
+        Parameters
+        ----------
+        from_list: `bool`, optional
+            Convert list elements to np.arrays?
+        """
+        import pandas as pd
+        if from_list:
+            df = df.applymap(lambda _: np.array(_) if isinstance(_, list) else _)
+        return cls(df.to_records(index=False))
+
     def to_fits_file(self, filename, clobber=False, header=None, extname=None, indices=None):
         """
         Save DataObject to a fits file.
