@@ -2,6 +2,38 @@
 """
 
 from __future__ import division, absolute_import, print_function
+import logging
+import os
+
+fields = ['process', 'threadName', 'filename', 'lineno', 'funcName']
+info = ':'.join([f'%({_})s' for _ in fields])
+fmt = f'%(asctime)s - %(name)s - %(levelname)s [{info}] - %(message)s'
+# Writes logging information to debug.log in plain text.
+# try:
+#     log_file = f'{os.environ["SLURM_JOB_ID"]}.redmapper.log'
+#     filemode = 'w'
+# except KeyError:
+#     log_file = 'redmapper.log'
+#     filemode = 'w'
+# log_file = os.path.join(os.environ['HOME'], 'redpipes', log_file)
+# log_level = logging.DEBUG
+# logging.captureWarnings(capture=True)
+# # for handler in logging.root.handlers[:]:
+# #     logging.root.removeHandler(handler)
+# # logging.basicConfig(level=log_level, filename=log_file, format=fmt,
+# #                     filemode='a')
+#
+# import sys
+# logging.basicConfig(stream=sys.stdout, level=log_level)
+#
+# # Writes logging information to console.
+# console_logger = logging.StreamHandler()
+# console_logger.setFormatter(logging.Formatter(fmt=fmt))
+# logger = logging.getLogger('config')
+# logger.addHandler(console_logger)
+# logger.setLevel = log_level
+
+
 from past.builtins import xrange
 
 # miscellaneous utilities and functions
@@ -832,7 +864,7 @@ def cic(value, posx=None, nx=None, posy=None, ny=None, posz=None, nz=None, avera
 # MakeNodes
 #########################
 
-def make_nodes(zrange, nodesize, maxnode=None):
+def make_nodes(zrange, nodesize, maxnode=None, minnode=None):
     """
     Make spline nodes over a given range, mostly but not entirely uniform.
 
@@ -850,6 +882,8 @@ def make_nodes(zrange, nodesize, maxnode=None):
        Default (and minimum) node spacing
     maxnode: `float`, optional
        Maximum useful node.  Default is None (do full redshift range)
+    minnode: `float`, optional
+       Minimum useful node.  Default is None (do full redshift range)
 
     Returns
     -------
@@ -862,8 +896,14 @@ def make_nodes(zrange, nodesize, maxnode=None):
     else:
         _maxnode = np.clip(maxnode, 0.0, zrange[1])
 
+    if minnode is None or minnode < 0.0:
+        _minnode = zrange[0]
+    else:
+        _minnode = np.clip(minnode, 0.0, zrange[1])
+        assert _minnode < _maxnode, 'minnode must be less than maxnode.'
+
     # Start with a simple arange
-    nodes = np.arange(zrange[0], _maxnode, nodesize)
+    nodes = np.arange(_minnode, _maxnode, nodesize)
 
     # Should we extend the last bin?
     if ((_maxnode - nodes.max()) > (nodesize / 2. + 0.01)):
@@ -908,7 +948,9 @@ def sample_from_pdf(f, ran, step, nsamp, **kwargs):
     x = np.arange(ran[0], ran[1], step)
     pdf = f(x, **kwargs)
     pdf /= np.sum(pdf)
-    cdf = np.cumsum(pdf)
+    # @jacobic cumsum has a bug for large arrays!
+    # cdf = np.cumsum(pdf) #@jacobic this array is small so should be fine.
+    cdf = np.cumsum(pdf.tolist())
     cdfi = (cdf * x.size).astype(np.int32)
 
     rand = (np.random.uniform(size=nsamp) * x.size).astype(np.int32)
@@ -934,10 +976,16 @@ def _pickle_method(m):
     -------
     attr: Attributes to pickle?
     """
-    if m.im_self is None:
-        return getattr, (m.im_class, m.im_func.func_name)
+    # if m.im_self is None:
+    #     return getattr, (m.im_class, m.im_func.func_name)
+    # else:
+    #     return getattr, (m.im_self, m.im_func.func_name)
+
+    # @jacobic: + py3 support
+    if m.__self__ is None:
+        return getattr, (m.im_class, m.__func__.__name__)
     else:
-        return getattr, (m.im_self, m.im_func.func_name)
+        return getattr, (m.__self__, m.__func__.__name__)
 
 
 def histoGauss(ax, array):
@@ -1105,7 +1153,6 @@ def read_members(catfile):
 ######################
 
 # At the moment, this doesn't take a filename, it just prints with a flush.
-
 class Logger(object):
     """
     A class for a simple logger with flushed output.
@@ -1119,6 +1166,11 @@ class Logger(object):
         else:
             self.py33 = True
 
+        # self.logger = logger
+
+    #TODO: reduce this to a method or ideally remove this class compltley and
+    # replace with a proper logger!
+
     def info(self, message):
         """
         Log an informational message.
@@ -1130,6 +1182,39 @@ class Logger(object):
         """
         if self.py33:
             print(message, flush=True)
+            # self.logger.info(message)
+        else:
+            print(message)
+            sys.stdout.flush()
+
+    def debug(self, message):
+        """
+        Log an informational message.
+
+        Parameters
+        ----------
+        message: `str`
+           Message to output
+        """
+        if self.py33:
+            print(message, flush=True)
+            # self.logger.info(message)
+        else:
+            print(message)
+            sys.stdout.flush()
+
+    def exception(self, message):
+        """
+        Log an informational message.
+
+        Parameters
+        ----------
+        message: `str`
+           Message to output
+        """
+        if self.py33:
+            print(message, flush=True)
+            # self.logger.exception(message)
         else:
             print(message)
             sys.stdout.flush()
