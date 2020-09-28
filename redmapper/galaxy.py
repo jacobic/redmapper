@@ -462,7 +462,7 @@ class FakeMaskConfig(object):
     A simple fake config to read in a mask
     """
 
-    def __init__(self, maskfile, mask_mode):
+    def __init__(self, maskfile, mask_mode, border=0.0):
         """
         Instantiate a FakeMaskConfig.
 
@@ -475,10 +475,11 @@ class FakeMaskConfig(object):
         """
         self.maskfile = maskfile
         self.mask_mode = mask_mode
+        self.border = border #@jacobic added border as required by HPMask
 
         class TempD(object):
             def __init__(self):
-                self.hpix = 0
+                self.hpix = [] #@jacobic changed this so the entire mask is  read in
                 self.nside = 0
 
         self.d = TempD()
@@ -590,6 +591,22 @@ class GalaxyCatalogMaker(object):
             self.y_ind = info_dict['Y_IND']
         except KeyError:
             self.y_ind = None
+        try:
+            self.w1_ind = info_dict['W1_IND']
+        except KeyError:
+            self.w1_ind = None
+        try:
+            self.w2_ind = info_dict['W2_IND']
+        except KeyError:
+            self.w2_ind = None
+        try:
+            self.w3_ind = info_dict['W3_IND']
+        except KeyError:
+            self.w3_ind = None
+        try:
+            self.w4_ind = info_dict['W4_IND']
+        except KeyError:
+            self.w4_ind = None
 
         self.filename = '%s_master_table.fit' % (self.outbase)
 
@@ -778,6 +795,14 @@ class GalaxyCatalogMaker(object):
             dtype.append(('z_ind', 'i2'))
         if self.y_ind is not None:
             dtype.append(('y_ind', 'i2'))
+        if self.w1_ind is not None:
+            dtype.append(('w1_ind', 'i2'))
+        if self.w2_ind is not None:
+            dtype.append(('w2_ind', 'i2'))
+        if self.w3_ind is not None:
+            dtype.append(('w3_ind', 'i2'))
+        if self.w4_ind is not None:
+            dtype.append(('w4_ind', 'i2'))
 
         tab = Entry(np.zeros(1, dtype=dtype))
 
@@ -811,6 +836,14 @@ class GalaxyCatalogMaker(object):
             tab.z_ind = self.z_ind
         if self.y_ind is not None:
             tab.y_ind = self.y_ind
+        if self.w1_ind is not None:
+            tab.w1_ind = self.w1_ind
+        if self.w2_ind is not None:
+            tab.w2_ind = self.w2_ind
+        if self.w3_ind is not None:
+            tab.w3_ind = self.w3_ind
+        if self.w4_ind is not None:
+            tab.w4_ind = self.w4_ind
 
         hdr = fitsio.FITSHDR()
         hdr['PIXELS'] = 1
