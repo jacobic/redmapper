@@ -88,7 +88,10 @@ class Mask(object):
 
         make_maskgals = False
         lockfile = maskgalfile + '.lock'
-        locktest = make_lockfile(lockfile, block=True, maxtry=300, waittime=2)
+        # locktest = make_lockfile(lockfile, block=True, maxtry=300, waittime=2)
+        # locktest = make_lockfile(lockfile, block=True, maxtry=500,
+        #                          waittime=10*(1+np.random.ranf()))
+        locktest = True
         if not locktest:
             raise RuntimeError("Could not get a lock to read/write maskgals!")
 
@@ -109,7 +112,7 @@ class Mask(object):
         self.maskgals_all = Catalog.from_fits_file(maskgalfile)
 
         # Clear lockfile
-        os.remove(lockfile)
+        # os.remove(lockfile)
 
     def select_maskgals_sample(self, maskgal_index=None):
         """
@@ -325,6 +328,7 @@ class Mask(object):
         else:
             mag = mag_in
             mag_err = 0*mag_in
+            self.config.logger.info(str(self.__dict__))
             raise ValueError('Survey limiting magnitude <= 0!')
             # Raise error here as this would lead to divide by zero if called.
 
