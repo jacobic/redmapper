@@ -203,6 +203,11 @@ class RedSequenceColorPar(object):
             if (loz.size > 0) : self.extrapolated[loz] = True
             if (hiz.size > 0) : self.extrapolated[hiz] = True
 
+            # @jacobic how could the last element which contains a fake bin i.e.
+            # "some absurdly large number"...not be extrapolated!? If this is
+            # not set then index errors can occur in the zred calculation.
+            self.extrapolated[-1] = True
+
             # set the pivotmag
             self.pivotmag = np.zeros(self.z.size, dtype=np.float64)
             spl=CubicSpline(pars[0][pivotmag_name+'_Z'],pars[0][pivotmag_name])
@@ -333,7 +338,9 @@ class RedSequenceColorPar(object):
         self.alpha = alpha
         for i in xrange(nz):
             f = schechter_pdf(self.lumrefmagbins, alpha=self.alpha, mstar=self._mstar[i])
-            self.lumnorm[:,i] = refmagbinsize*np.cumsum(f)
+            # @jacobic cumsum has a bug for large arrays!
+            # self.lumnorm[:,i] = refmagbinsize*np.cumsum(f) #@jacobic this array is small so should be fine.
+            self.lumnorm[:,i] = refmagbinsize*np.cumsum(f.tolist())
 
         if has_file:
             # lupcorr (annoying!)
