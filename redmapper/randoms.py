@@ -2,6 +2,7 @@
 """
 
 import fitsio
+import os
 import esutil
 import re
 import copy
@@ -20,7 +21,8 @@ class GenerateRandoms(object):
     Class to generate redmapper raw randoms using a redmapper volume limit mask.
     """
 
-    def __init__(self, config, vlim_mask=None, vlim_lstar=None, redmapper_cat=None):
+    def __init__(self, config, vlim_mask=None, vlim_lstar=None,
+                 redmapper_cat=None, use_geometry_mask=False):
         """
         Instantiate a GenerateRandoms object, to generate seed randoms for redmapper.
 
@@ -33,8 +35,13 @@ class GenerateRandoms(object):
            Volume limit lstar, or else it is from config.vlim_lstar
         redmapper_cat : `redmapper.ClusterCatalog`, optional
            Redmapper catalog, or else it will be read from config.catfile
+        use_geometry_mask : bool
+            Should the maskfile be applied to the randoms? This is useful
+            when the user has updated the maskfile to exclude clusters from
+            the redmapper catalog.
         """
         self.config = config
+        self.use_geometry_mask = use_geometry_mask
 
         if self.config.randfile is None:
             raise RuntimeError("Must set randfile in config to run GenerateRandoms.")
@@ -87,7 +94,21 @@ class GenerateRandoms(object):
         if m is None:
             raise RuntimeError("Config has randfile of incorrect format.  Must end in _master_table.fit")
         outbase = m.groups()[0]
-        maker = RandomCatalogMaker(outbase, info_dict, nside=self.config.galfile_nside)
+
+        if self.use_geometry_mask:
+            self.config.logger.info('Applying geometry mask to randoms with '
+                                    'mask mode 3.')
+            maskfile = self.config.maskfile
+            mask_mode = 3
+        else:
+            self.config.logger.info('No geometry mask will be applied to the '
+                                    'randoms.')
+            maskfile = None
+            mask_mode = 0
+
+        maker = RandomCatalogMaker(outbase, info_dict,
+                                   nside=self.config.galfile_nside,
+                                   maskfile=maskfile, mask_mode=mask_mode)
 
         self.config.logger.info("Generating %d randoms to %s" % (n_left, outbase))
 
