@@ -163,7 +163,7 @@ class RunLikelihoods(ClusterRunner):
         Internal method to reset all cluster values to "bad" values.
         """
         cluster.lnlamlike = -1e11
-        cluster.lnbcglike = -1e11
+        cluster.lncglike = -1e11
         cluster.lnlike = -1e11
 
         super(RunLikelihoods, self)._reset_bad_values(cluster)
@@ -201,7 +201,7 @@ class RunLikelihoods(ClusterRunner):
         # And the central likelihood
         if self.config.lnw_cen_sigma <= 0.0:
             # We do not have a calibration yet
-            cluster.lnbcglike = 0.0
+            cluster.lncglike = 0.0
         else:
             # First phi_cen
             mbar = (cluster.mstar + self.config.wcen_Delta0 +
@@ -235,9 +235,9 @@ class RunLikelihoods(ClusterRunner):
             with np.warnings.catch_warnings():
                 np.warnings.simplefilter("error")
 
-                cluster.lnbcglike = np.log(phi_cen * np.clip(g, 1e-10, None) * fw)
+                cluster.lncglike = np.log(phi_cen * np.clip(g, 1e-10, None) * fw)
 
-            cluster.lnlike = cluster.lnbcglike + cluster.lnlamlike
+            cluster.lnlike = cluster.lncglike + cluster.lnlamlike
 
         return bad
 
