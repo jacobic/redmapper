@@ -170,7 +170,8 @@ class ClusterRunner(object):
         # read in the depth structure
         try:
             self.depthstr = DepthMap(self.config)
-        except:
+        except Exception as e:
+            self.config.logger.info(str(e))
             self.depthstr = None
 
         if self.depthstr is None and not self.read_gals:
@@ -644,55 +645,11 @@ class ClusterRunner(object):
                     # Overwrite z_lambda with grid redshift.
                     cat.z_lambda = cat.z
                     cat.z_lambda_e = self.config.scanmode_step
-                    peak = np.argmax(cat.Lambda)
-                    self.cat[idx] = cat._ndarray[peak]
-                    mem_match_id = self.cat[idx].mem_match_id
-                    scan.append([cat.Lambda, cat.Lambda_e])
-
-                    if self.config.scanmode_plot:
-                        scan_dist.plot_values(cat, mem_match_id=mem_match_id)
+                    scan.append(cat)
 
         if self.config.scanmode:
+            self.cat = ClusterCatalog(np.concatenate([_._ndarray for _ in scan]))
 
-            # `scan` only contains lambda and lambda_e info as redshift info is
-            # the same for all scans on all clusters.
-            scan, scan_size = np.array(scan), cat.z.size
-
-            # Add scan fields to ClusterCatalog.
-            scan_dtype = [('z_scan', 'f4', scan_size),
-                          ('z_scan_e', 'f4', scan_size),
-                          ('z_scan_peak', 'f4'),
-                          ('z_scan_peak_e', 'f4'),
-                          ('lambda_scan', 'f4', scan_size),
-                          ('lambda_scan_e', 'f4', scan_size),
-                          ('lambda_scan_peak', 'f4'),
-                          ('lambda_scan_peak_e', 'f4')
-                          ]
-            self.cat.add_fields(newdtype=scan_dtype)
-
-            # Add scan information for all clusters in the catalog.
-            lambda_scan, lambda_scan_e = scan[:, 0], scan[:, 1]
-            peak = np.argmax(lambda_scan, axis=1)
-            self.cat['lambda_scan'] = lambda_scan
-            self.cat['lambda_scan_e'] = lambda_scan_e
-            self.cat['lambda_scan_peak'] = lambda_scan[:, peak].diagonal()
-            self.cat['lambda_scan_peak_e'] = lambda_scan_e[:, peak].diagonal()
-            self.cat['z_scan'] = cat.z_lambda
-            self.cat['z_scan_e'] = cat.z_lambda_e
-            self.cat['z_scan_peak'] = cat.z_lambda[peak]
-            self.cat['z_scan_peak_e'] = cat.z_lambda_e[peak]
-
-            # Set for the next run using the scan peak for the initial cluster.
-            self.config.logger.info('Turning off scanmode...')
-            self.config.scanmode = False
-            self.match_centers_to_galaxies = True
-            self.record_members = True
-            self.do_percolation_masking = self.config.runcat_percolation_masking
-
-            # Override _setup to prevent self.cat from being overwritten.
-            self._setup = lambda *args, **kwargs: True
-            self._more_setup = lambda *args, **kwargs: True
-            self.run(*args, **kwargs)
         else:
             self._postprocess()
             self._cleanup()

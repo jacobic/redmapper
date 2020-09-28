@@ -1001,3 +1001,19 @@ class ClusterCatalog(Catalog):
                                   bkg=self.bkg,
                                   cbkg=self.cbkg,
                                   zredbkg=self.zredbkg)
+
+    def grid(self):
+        #TODO: add docstring
+        zgrid = np.arange(*self.config.zrange, self.config.scanmode_step)
+        for i, _ in enumerate(self):
+            for j, z in enumerate(zgrid):
+                # slice so that we get a ClusterCatalog rather than a Cluster
+                # cluster = copy.deepcopy(self[slice(i, i + 1)])
+                cluster = self[slice(i, i + 1)]
+                if j == 0:
+                    cat = cluster
+                else:
+                    cat.append(cluster)
+                cat[j].redshift = z
+                cat[j].z = z
+            yield cat
