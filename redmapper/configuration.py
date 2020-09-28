@@ -203,6 +203,10 @@ class Configuration(object):
     zmemfile = ConfigField()
     redmagicfile = ConfigField()
 
+    scanmode = ConfigField(default=False, required=True)
+    scanmode_step = ConfigField(default=0.005, required=True)
+    scanmode_plot = ConfigField(default=False, required=True)
+
     calib_nproc = ConfigField(default=1, required=True)
     calib_run_nproc = ConfigField(default=1, required=True)
     calib_run_min_nside = ConfigField(default=1, required=True)
@@ -269,7 +273,9 @@ class Configuration(object):
     calib_color_nodesizes = ConfigField(isArray=True, default=np.array([0.05]))
     calib_slope_nodesizes = ConfigField(isArray=True, default=np.array([0.1]))
     calib_color_maxnodes = ConfigField(isArray=True, default=np.array([-1.0]))
+    calib_color_minnodes = ConfigField(isArray=True, default=np.array([-1.0]))
     calib_covmat_maxnodes = ConfigField(isArray=True, default=np.array([-1.0]))
+    calib_covmat_minnodes = ConfigField(isArray=True, default=np.array([-1.0]))
     calib_covmat_nodesize = ConfigField(default=0.15)
     # calib_covmat_min_eigenvalue = ConfigField(default=0.0001)
     # calib_covmat_prior = ConfigField(default=0.45)
@@ -369,6 +375,7 @@ class Configuration(object):
     percolation_maxcen = ConfigField(default=5, required=True)
     percolation_memradius = ConfigField()
     percolation_memlum = ConfigField()
+    percolation_maxrad = ConfigField()
 
     vlim_lstar = ConfigField(default=0.2, required=False)
     vlim_depthfiles = ConfigField(default=[], required=False, isList=True)
@@ -414,6 +421,10 @@ class Configuration(object):
         """
         self._reset_vars()
 
+        # Required for __reduce__()
+        self._outpath = outpath
+        self._configfile = configfile
+
         # First, read in the yaml file
         confdict = read_yaml(configfile)
 
@@ -438,6 +449,7 @@ class Configuration(object):
         if (self.area is not None):
             if self.depthfile is not None:
                 self.logger.info("WARNING: You should not need to set area in the config file when you have a depth map.")
+
             if (np.abs(self.area - gal_stats['area']) > 1e-3):
                 self.logger.info("Config area is not equal to galaxy file area.  Using config area.")
                 gal_stats.pop('area')
@@ -482,7 +494,11 @@ class Configuration(object):
         self._set_lengths(['calib_colormem_colormodes', 'calib_colormem_sigint'],
                           len(self.calib_colormem_zbounds) + 1)
         self._set_lengths(['calib_color_nodesizes', 'calib_slope_nodesizes',
-                           'calib_color_maxnodes', 'calib_covmat_maxnodes'],
+                           'calib_color_maxnodes',
+                           # 'calib_color_minnodes',
+                           'calib_covmat_maxnodes'
+                           # 'calib_covmat_minnodes'
+                           ],
                            self.nmag - 1)
                            #'calib_color_order'], self.nmag - 1)
 
@@ -525,6 +541,9 @@ class Configuration(object):
             os.makedirs(self.outpath)
         if not os.path.exists(os.path.join(self.outpath, self.plotpath)):
             os.makedirs(os.path.join(self.outpath, self.plotpath))
+
+    # def __reduce__(self):
+    #     return (self.__class__, (self._configfile, self._outpath))
 
     def validate(self):
         """
@@ -632,6 +651,10 @@ class Configuration(object):
                 gal_stats['survey_mode'] = 1
             elif hdrmode == 'LSST':
                 gal_stats['survey_mode'] = 2
+            elif hdrmode == 'PS1':
+                gal_stats['survey_mode'] = 3
+            elif hdrmode == 'SM':
+                gal_stats['survey_mode'] = 4
             else:
                 raise ValueError("Input galaxy file with unknown mode: %s" % (hdrmode))
 
@@ -672,6 +695,10 @@ class Configuration(object):
                 gal_stats['survey_mode'] = 1
             elif (mode == 'LSST'):
                 gal_stats['survey_mode'] = 2
+            elif (mode == 'PS1'):
+                gal_stats['survey_mode'] = 3
+            elif (mode == 'SM'):
+                gal_stats['survey_mode'] = 4
             else:
                 raise ValueError("Input galaxy file with unknown mode: %s" % (mode))
 

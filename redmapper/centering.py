@@ -90,7 +90,12 @@ class CenteringBCG(Centering):
         # This is somewhat arbitrary, and is not yet configurable
         pmem_cut = 0.8
 
-        use, = np.where((self.cluster.neighbors.r < self.cluster.r_lambda) &
+        if self.config.percolation_maxrad:
+            maxrad = self.config.percolation_maxrad
+        else:
+            maxrad = self.cluster.r_lambda
+
+        use, = np.where((self.cluster.neighbors.r < maxrad) &
                         ((self.cluster.neighbors.pmem > pmem_cut) |
                          (np.abs(self.cluster.neighbors.zred - self.cluster.redshift) < 2.0 * self.cluster.neighbors.zred_e)))
 
@@ -138,12 +143,23 @@ class CenteringWcenZred(Centering):
         success: `bool`
            True when a center is successfully found. (Always True).
         """
+
+        if self.config.percolation_maxrad:
+            maxrad = self.config.percolation_maxrad
+        else:
+            maxrad = self.cluster.r_lambda
+
         # These are the galaxies considered as candidate centers
-        use, = np.where((self.cluster.neighbors.r < self.cluster.r_lambda) &
+        use, = np.where((self.cluster.neighbors.r < maxrad) &
                         (self.cluster.neighbors.pfree >= self.config.percolation_pbcg_cut) &
                         (self.cluster.neighbors.zred_chisq < self.config.wcen_zred_chisq_max) &
                         ((self.cluster.neighbors.pmem > 0.0) |
                          (np.abs(self.cluster.redshift - self.cluster.neighbors.zred) < 5.0 * self.cluster.neighbors.zred_e)))
+
+        if use.size == 0:
+            # @jacobic, this can easily happen if there are no centres within
+            # maxrad (from the X-ray centre)
+            return False
 
         # Do the phi_cen filter
         mbar = self.cluster.mstar + self.config.wcen_Delta0 + self.config.wcen_Delta1 * np.log(self.cluster.Lambda / self.config.wcen_pivot)
@@ -171,10 +187,7 @@ class CenteringWcenZred(Centering):
         u, = np.where(self.cluster.neighbors.p > 0.0)
 
         # This is the maximum radius in units of degrees (r_lambda is Mpc; mpc_scale is Mpc / degree)
-        # maxrad = 1.1 * self.cluster.r_lambda / self.cluster.mpc_scale
-
-        # @jacobic max radius is 400Kpc in CODEX. #TODO: make this configurable.
-        maxrad = 0.4 / self.cluster.mpc_scale
+        maxrad = 1.1 * self.cluster.r_lambda / self.cluster.mpc_scale
 
         htm_matcher = esutil.htm.Matcher(self.cluster.neighbors.depth,
                                          self.cluster.neighbors.ra[use],
