@@ -307,7 +307,9 @@ class VolumeLimitMask(object):
         astr.area[lo] = np.sum(fracgoods.astype(np.float64)) * pixsize
 
         if np.sum(~lo) > 0:
-            carea = pixsize * np.cumsum(fracgoods.astype(np.float64))
+            # @jacobic cumsum has a bug for large arrays!
+            # carea = pixsize * np.cumsum(fracgoods.astype(np.float64))
+            carea = pixsize * np.cumsum(fracgoods.astype(np.float64).tolist())
             astr.area[~lo] = carea[carea.size - inds[~lo]]
 
         return astr

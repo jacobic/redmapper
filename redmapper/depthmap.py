@@ -253,7 +253,12 @@ class DepthMap(object):
 
         lo = (inds < 0)
         areas[lo] = np.sum(fracgoods) * pixsize
-        carea = pixsize * np.cumsum(fracgoods)
+
+        #@jacobic cumsum has a bug for large arrays!
+        #@jacobic use itertools or convert to list first
+        # carea = pixsize * np.cumsum(fracgoods)
+        # carea = list(itertools.accumulate(a))
+        carea = pixsize * np.cumsum(fracgoods.tolist())
         areas[~lo] = carea[carea.size - inds[~lo]]
 
         return areas
