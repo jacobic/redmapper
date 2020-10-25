@@ -189,7 +189,7 @@ class Cluster(Entry):
 
         self.neighbors = None
         if (neighbors is not None):
-            self.neighbors = copy.deepcopy(neighbors)
+            self.neighbors = GalaxyCatalog(neighbors._ndarray.copy()) #@jacobic: this avoid pycharm debugger detachment! self.neighbors = copy.deepcopy(neighbors)
 
             # extra fields
             neighbor_extra_dtype = [('R', 'f8'),
