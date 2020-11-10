@@ -4,6 +4,8 @@
 from __future__ import division, absolute_import, print_function
 
 import os
+from typing import Iterable
+
 import numpy as np
 import fitsio
 import copy
@@ -176,6 +178,10 @@ class RedmapperCalibrator(object):
         else:
             if new_zreds:
                 self.config.logger.info("Remember to run zreds before running the full cluster finder.  No need to recompute the background.")
+                master = GalaxyCatalog.from_fits_file(self.config.galfile)
+                with open(r"run_zred.pixarr", "w") as _:
+                    _.write(f'({" ".join(master[0].hpix.astype(str))})')
+
             else:
                 self.config.logger.info("Calibration done on full footprint, so background and zreds are already available.")
 
@@ -335,10 +341,25 @@ class RedmapperCalibrationIteration(object):
             self.config.d.nside = self.config.nside
 
             if self.config.galfile_pixelized:
-                zredRunpix = ZredRunPixels(self.config)
-                zredRunpix.run()
+
+                #@jacobic: Run check to see if we can use sbatch system to speed things up!
+                hpix = self.config.hpix
+
+                if not isinstance(hpix, Iterable):
+                    _hpix = [hpix]
+                else:
+                    _hpix = hpix
+
+                if len(_hpix) == 0 or self.config.nside == 0:
+                    yml = f'run_zred_iter{iteration}.yml'
+                    self.config.output_yaml(yml)
+                    self.config.logger.info(f"Please run zreds using {yml} with a batch system to continue.")
+                    self.config.logger.info("ZredRunPixels")
+                    zredRunpix = ZredRunPixels(self.config)
+                    zredRunpix.run()
             else:
                 zredRuncat = ZredRunCatalog(self.config)
+                self.config.logger.info("ZredRunCatalog")
                 zredRuncat.run(self.config.galfile, self.config.zredfile)
 
         # Compute the chisq background
