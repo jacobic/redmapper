@@ -208,7 +208,7 @@ class SpecPlot(object):
         if bad.size > 0:
             # ax.plot(z_phot[use[bad]], z_spec[use[bad]], 'r*')
             ax.plot(z_spec[use[bad]],  z_phot[use[bad]], 'r*',
-                    label=f'Outliers ({self.fracout * 100:.2f}%)')
+                    label=f'${self.nsig}\sigma$ Outliers ({self.fracout * 100:.2f}%)')
 
         ax.legend(loc=4, fontsize=14, title=f'{len(z_spec)} Spectroscopic '
                                             f'Clusters')
