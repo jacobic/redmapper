@@ -9,6 +9,8 @@ import fitsio
 import esutil as eu
 import numpy as np
 import itertools
+from redmapper.utilities import astro_to_sphere
+import healpy as hp
 
 
 class DataObject(object):
@@ -38,7 +40,7 @@ class DataObject(object):
             self._ndarray = self._merge_arrays(arrays)
 
     @classmethod
-    def from_fits_file(cls, filename, ext=1, rows=None):
+    def from_fits_file(cls, filename, ext=1, columns=None, rows=None):
         """
         Construct a DataObject from a fits file.
 
@@ -51,7 +53,7 @@ class DataObject(object):
         rows: `np.array`, optional
            Row indices to read.  Default is None (read all rows).
         """
-        array = fitsio.read(filename, ext=ext, rows=rows, lower=True, trim_strings=True)
+        array = fitsio.read(filename, ext=ext, columns=columns, rows=rows, lower=True, trim_strings=True)
         return cls(array)
 
     @classmethod
@@ -115,6 +117,9 @@ class DataObject(object):
         array = np.zeros(self._ndarray.size, newdtype)
         self._lower_array(array)
         self._ndarray = self._merge_arrays([self._ndarray, array])
+
+    def to_hpix(self, nside, nest=False):
+        return hp.ang2pix(nside, *astro_to_sphere(self.ra, self.dec), nest=nest)
 
     def to_pandas(self, to_list=True):
         """
