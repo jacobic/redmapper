@@ -86,46 +86,47 @@ class RunZredPixelTask(object):
         # Note that the pixel number will probably contain many sub-pixels, but
         # this is fine because we just don't want these jobs to have the possibility
         # of stepping on each other
-        writelock = '%s/%s_zreds_%07d.lock' % (zredpath, self.config.outbase, self.pixel)
-        test = make_lockfile(writelock, block=False)
-        if not test:
-            raise IOError("Failed to get lock on pixel %d" % (self.pixel))
+
+        # writelock = '%s/%s_zreds_%07d.lock' % (zredpath, self.config.outbase, self.pixel)
+        # test = make_lockfile(writelock, block=False)
+        # if not test:
+        #     raise IOError("Failed to get lock on pixel %d" % (self.pixel))
 
         # Compute all the zreds and output pixels
         runPixels = ZredRunPixels(self.config)
         runPixels.run(single_process=True, no_zred_table=True, verbose=True)
 
         # We are done writing, so we can clear the lockfile
-        os.unlink(writelock)
-
-        # Make a lockfile and check what's been output already.
-
-        lockfile = '%s.lock' % (self.config.zredfile)
-        locktest = make_lockfile(lockfile, block=True, maxtry=60, waittime=2)
-        if locktest:
-            self.config.logger.info("Created lock file: %s" % (lockfile))
-            self.config.logger.info("Checking for zred completion...")
-
-            test_files = glob.glob('%s/%s_zreds_???????.fit' % (zredpath, self.config.outbase))
-            test_locks = glob.glob('%s/%s_zreds_???????.lock' % (zredpath, self.config.outbase))
-            if (len(test_files) == len(runPixels.galtable.filenames) and
-                len(test_locks) == 0):
-                # We have written all the files, and there are no locks left.
-                self.config.logger.info("All zred files have been found!  Creating master table.")
-
-                indices = np.arange(len(runPixels.galtable.filenames))
-                filenames = []
-                for i in indices:
-                    filenames.append('%s/%s_zreds_%07d.fit' % (zredpath, self.config.outbase, runPixels.galtable.hpix[i]))
-
-                indices_and_filenames = list(zip(indices, filenames))
-
-                runPixels.make_zred_table(indices_and_filenames)
-            elif len(test_locks) > 0:
-                pass
-
-            # clear the lockfile
-            os.unlink(lockfile)
-        else:
-            self.config.logger.info("Failed to get a consolidate lock.  That's okay.")
+        # os.unlink(writelock)
+        #
+        # # Make a lockfile and check what's been output already.
+        #
+        # lockfile = '%s.lock' % (self.config.zredfile)
+        # locktest = make_lockfile(lockfile, block=True, maxtry=60, waittime=2)
+        # if locktest:
+        #     self.config.logger.info("Created lock file: %s" % (lockfile))
+        #     self.config.logger.info("Checking for zred completion...")
+        #
+        #     test_files = glob.glob('%s/%s_zreds_???????.fit' % (zredpath, self.config.outbase))
+        #     test_locks = glob.glob('%s/%s_zreds_???????.lock' % (zredpath, self.config.outbase))
+        #     if (len(test_files) == len(runPixels.galtable.filenames) and
+        #         len(test_locks) == 0):
+        #         # We have written all the files, and there are no locks left.
+        #         self.config.logger.info("All zred files have been found!  Creating master table.")
+        #
+        #         indices = np.arange(len(runPixels.galtable.filenames))
+        #         filenames = []
+        #         for i in indices:
+        #             filenames.append('%s/%s_zreds_%07d.fit' % (zredpath, self.config.outbase, runPixels.galtable.hpix[i]))
+        #
+        #         indices_and_filenames = list(zip(indices, filenames))
+        #
+        #         runPixels.make_zred_table(indices_and_filenames)
+        #     elif len(test_locks) > 0:
+        #         pass
+        #
+        #     # clear the lockfile
+        #     os.unlink(lockfile)
+        # else:
+        #     self.config.logger.info("Failed to get a consolidate lock.  That's okay.")
 
