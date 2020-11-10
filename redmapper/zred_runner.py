@@ -27,6 +27,7 @@ from .zred_color import ZredColor
 from .galaxy import GalaxyCatalog, get_subpixel_indices, zred_extra_dtype
 from .catalog import Catalog, Entry
 from .redsequence import RedSequenceColorPar
+import tqdm
 
 class ZredRunCatalog(object):
     """
@@ -260,35 +261,41 @@ class ZredRunPixels(object):
         outfile: `str`
            zredfile that was saved
         """
-        # Read in just one single pixel
-        galaxies = GalaxyCatalog.from_galfile(self.config.galfile,
-                                              nside=self.galtable.nside,
-                                              hpix=[self.galtable.hpix[index]],
-                                              border=0.0)
-        galaxies.add_zred_fields(self.config.zred_nsamp)
-
-        if self.single_process:
-            ctr = self.ctr
-            ngal = self.total_galaxies
-        else:
-            ctr = 0
-            ngal = galaxies.size
-
-        self.zredc.compute_zreds(galaxies)
-        ctr += galaxies.size
-
-        if self.single_process:
-            self.ctr = ctr
-
-        # And write out the pixel file ... but just the zreds
-        zreds = np.zeros(galaxies.size, dtype=zred_extra_dtype(self.config.zred_nsamp))
-        for dt in zred_extra_dtype(self.config.zred_nsamp):
-            zreds[dt[0]][:] = galaxies._ndarray[dt[0].lower()][:]
 
         outfile_nopath = '%s_zreds_%07d.fit' % (self.outbase, self.galtable.hpix[index])
         outfile = os.path.join(self.zredpath, outfile_nopath)
 
-        fitsio.write(outfile, zreds, clobber=True)
+        if not os.path.isfile(outfile):
+
+            print(f'...Working on {index}')
+            # Read in just one single pixel
+            galaxies = GalaxyCatalog.from_galfile(self.config.galfile,
+                                                  nside=self.galtable.nside,
+                                                  hpix=[self.galtable.hpix[index]],
+                                                  border=0.0)
+            galaxies.add_zred_fields(self.config.zred_nsamp)
+
+            if self.single_process:
+                ctr = self.ctr
+                ngal = self.total_galaxies
+            else:
+                ctr = 0
+                ngal = galaxies.size
+
+            self.zredc.compute_zreds(galaxies)
+            ctr += galaxies.size
+
+            if self.single_process:
+                self.ctr = ctr
+
+            # And write out the pixel file ... but just the zreds
+            zreds = np.zeros(galaxies.size, dtype=zred_extra_dtype(self.config.zred_nsamp))
+            for dt in zred_extra_dtype(self.config.zred_nsamp):
+                zreds[dt[0]][:] = galaxies._ndarray[dt[0].lower()][:]
+
+            fitsio.write(outfile, zreds, clobber=True)
+        else:
+            print(f'...Skipping {index} as already there!')
 
         return (index, outfile)
 
@@ -326,17 +333,30 @@ class ZredRunPixels(object):
         zredtable.filenames = ''
         zredtable.ngals = 0
 
-        for index, filename in indices_and_filenames:
-            # Make sure file exists
-            if not os.path.isfile(filename):
-                raise ValueError("Could not find zredfile: %s" % (filename))
-            # check size of file
-            hdr = fitsio.read_header(filename, ext=1)
-            if hdr['NAXIS2'] != self.galtable.ngals[index]:
-                raise ValueError("Length mismatch for zredfile: %s" % (filename))
+        bad_zredfiles = []
+        for index, filename in tqdm.tqdm(indices_and_filenames):
 
-            zredtable.filenames[index] = os.path.basename(filename)
-            zredtable.ngals[index] = self.galtable.ngals[index]
+            #TODO: this could (and should be sped up)
+            try:
+                # Make sure file exists
+                if not os.path.isfile(filename):
+                    msg = f"Could not find zredfile: {filename}"
+                    raise ValueError(msg)
+                # check size of file
+                hdr = fitsio.read_header(filename, ext=1)
+                if hdr['NAXIS2'] != self.galtable.ngals[index]:
+                    msg = f'Length mismatch for zredfile: {filename}'
+                    raise ValueError(msg)
+
+                zredtable.filenames[index] = os.path.basename(filename)
+                zredtable.ngals[index] = self.galtable.ngals[index]
+            except ValueError:
+                bad_zredfiles.append((filename, msg))
+
+        if bad_zredfiles != []:
+            self.config.logger(bad_zredfiles)
+            self.config.logger('\n'.join([_[0] for _ in bad_zredfiles]))
+            raise ValueError('Please check the list of bad or missing zredfiles')
 
         hdr = fitsio.FITSHDR()
         hdr['PIXELS'] = 1
