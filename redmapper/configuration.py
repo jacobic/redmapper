@@ -218,6 +218,7 @@ class Configuration(object):
 
     border = ConfigField(default=0.0, required=True)
     hpix = ConfigField(default=[], required=True, isArray=True)
+    hpix_bkg_frac = ConfigField(default=1, required=True)
     nside = ConfigField(default=0, required=True)
     galfile_pixelized = ConfigField(required=True)
 
@@ -653,8 +654,10 @@ class Configuration(object):
                 gal_stats['survey_mode'] = 2
             elif hdrmode == 'PS1':
                 gal_stats['survey_mode'] = 3
-            elif hdrmode == 'SM':
+            elif hdrmode == 'WISE':
                 gal_stats['survey_mode'] = 4
+            elif hdrmode == 'KIDS':
+                gal_stats['survey_mode'] = 5
             else:
                 raise ValueError("Input galaxy file with unknown mode: %s" % (hdrmode))
 
@@ -697,8 +700,10 @@ class Configuration(object):
                 gal_stats['survey_mode'] = 2
             elif (mode == 'PS1'):
                 gal_stats['survey_mode'] = 3
-            elif (mode == 'SM'):
+            elif (mode == 'WISE'):
                 gal_stats['survey_mode'] = 4
+            elif (mode == 'KIDS'):
+                gal_stats['survey_mode'] = 5
             else:
                 raise ValueError("Input galaxy file with unknown mode: %s" % (mode))
 
