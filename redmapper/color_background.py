@@ -332,16 +332,29 @@ class ColorBackgroundGenerator(object):
             self.config.logger.info("Found %s and clobber is False" % (self.config.bkgfile_color))
             return
 
-        # read in the galaxies
-        gals = GalaxyCatalog.from_galfile(self.config.galfile,
-                                          nside=self.config.d.nside,
-                                          hpix=self.config.d.hpix,
-                                          border=self.config.border)
+        master = Entry.from_fits_file(self.config.galfile)
+        npix = master.hpix.size
+        self.config.logger.info(f'{master.ngals.sum()} galaxies available.')
+
+        #@jacobic: sample hpix for bkg if config option is set.
+        if self.config.hpix_bkg_frac == 1:
+            hpix = self.config.d.hpix
+            nside = self.config.d.nside
+        else:
+            nchoice = int(self.config.hpix_bkg_frac * npix)
+            hpix = master.hpix[np.random.choice(npix, nchoice, replace=False)]
+            self.config.logger.info(f'Background sampling {len(hpix)}/{npix} pixels.')
+            nside = master.nside
+
+        gals = GalaxyCatalog.from_galfile(self.config.galfile, nside=nside,
+                                          hpix=hpix, border=self.config.border,
+                                          subset=['refmag', 'mag'])
+        self.config.logger.info(f'{gals.size} galaxies loaded.')
 
         # Generate ranges based on the data
         refmagbinsize = 0.1
 
-        refmagrange = np.array([12.0, self.config.limmag_ref])
+        refmagrange = np.array([12.0, self.config.limmag_catalog])
 
         nmag = self.config.nmag
         ncol = nmag - 1
@@ -355,7 +368,7 @@ class ColorBackgroundGenerator(object):
         for i in xrange(ncol):
             use, = np.where((col[:, i] > colrange_default[0]) &
                             (col[:, i] < colrange_default[1]) &
-                            (gals.refmag < (self.config.limmag_ref - 0.5)))
+                            (gals.refmag < (self.config.limmag_catalog - 0.5)))
 
             h = esutil.stat.histogram(col[use, i], min=colrange_default[0],
                                       max=colrange_default[1], binsize=colbinsize)

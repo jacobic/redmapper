@@ -15,6 +15,12 @@ scripts = ['bin/redmapper_run_zred_pixel.py',
            'bin/redmapper_run_redmapper_pixel.py',
            'bin/redmapper_batch.py',
            'bin/redmapper_make_zred_bkg.py',
+
+            #@jacobic: run zreds using all cores on arbitary number of nodes/processes in an sbatch array.
+           'bin/redmapper_run_zred_sbatch.py', #@jacobic: python code
+           'bin/redmapper_run_zred_sbatch.cmd', # @jacobic: slurm wrapper for python code.
+           'bin/redmapper_make_zred_table.py', #@jacobic: make zred master table after things have finished.
+
            'bin/redmapper_calibrate.py',
            'bin/redmapper_consolidate_run.py',
            'bin/redmagic_calibrate.py',
